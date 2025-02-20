@@ -74,11 +74,13 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         country: 'AU',
         currency: 'aud',
         total: {
-          label: 'Pool Safety Inspection',
+          label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
           amount: amount * 100, // Convert to cents
         },
+        requestShipping: false,
         requestPayerName: true,
         requestPayerEmail: true,
+        disableWallets: ['link'], // Only show Apple Pay/Google Pay
       });
 
       // Check if the Payment Request is available
@@ -101,8 +103,8 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
             paymentMethod: event.paymentMethod.type,
           });
 
-          // Then confirm the payment with the updated client secret
-          const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+          // For Apple Pay / Google Pay, use confirmCardPayment
+          const { error: confirmError } = await stripe.confirmCardPayment(
             newClientSecret || clientSecret,
             {
               payment_method: event.paymentMethod.id,
@@ -111,17 +113,13 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
           );
 
           if (confirmError) {
+            event.complete('fail');
             throw new Error(confirmError.message);
           }
 
           // Complete the payment request
           event.complete('success');
-
-          if (paymentIntent.status === 'succeeded') {
-            router.push("/checkout/success");
-          } else {
-            throw new Error('Payment failed');
-          }
+          router.push("/checkout/success");
         } catch (error: any) {
           console.error('Express payment error:', error);
           setError(error.message || 'Payment failed. Please try again.');
@@ -143,7 +141,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     if (prRef.current) {
       prRef.current.update({
         total: {
-          label: 'Pool Safety Inspection',
+          label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
           amount: amount * 100, // Convert to cents
         },
       });
@@ -227,7 +225,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
               paymentRequest,
               style: {
                 paymentRequestButton: {
-                  type: 'default',
+                  type: 'buy',
                   theme: 'dark',
                   height: '44px',
                 },
