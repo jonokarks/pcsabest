@@ -6,13 +6,21 @@ import { useState } from "react";
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const toggleMenu = () => {
+  const toggleMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setIsMenuOpen(!isMenuOpen);
   };
 
+  // Close menu when clicking outside
+  const closeMenu = () => {
+    if (isMenuOpen) {
+      setIsMenuOpen(false);
+    }
+  };
+
   return (
-    <header className="bg-white shadow-sm relative">
-      <nav className="container mx-auto px-4 py-4">
+    <header className="bg-white shadow-sm" onClick={closeMenu}>
+      <nav className="container mx-auto px-4 py-4 relative">
         <div className="flex justify-between items-center">
           <Link href="/" className="text-2xl font-bold text-teal-600">
             Pool Compliance SA
@@ -20,7 +28,8 @@ export default function Header() {
 
           {/* Hamburger Menu Button */}
           <button
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            type="button"
+            className="md:hidden w-10 h-10 p-2 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500 relative z-50 cursor-pointer"
             onClick={toggleMenu}
             aria-label="Toggle menu"
             aria-expanded={isMenuOpen}
@@ -60,14 +69,23 @@ export default function Header() {
           </div>
 
         </div>
+        {/* Mobile Menu Backdrop */}
+        {isMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-200"
+            style={{ top: '72px' }}
+            onClick={closeMenu}
+          />
+        )}
 
         {/* Mobile Menu */}
         <div 
-          className={`md:hidden absolute top-full left-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
-            isMenuOpen ? 'translate-y-0' : '-translate-y-full'
+          className={`md:hidden absolute left-0 right-0 top-full bg-white shadow-lg border-t transition-all duration-200 ease-in-out z-50 ${
+            isMenuOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-1'
           }`}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="container mx-auto px-4 py-4 space-y-3">
+          <div className="px-4 py-4 space-y-2">
             <Link
               href="/"
               className="block text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-4 py-2 rounded-lg transition duration-150"
