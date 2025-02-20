@@ -32,6 +32,7 @@ interface RequestBody {
   includeCprSign: boolean;
   customerDetails?: CustomerDetails;
   paymentIntentId?: string;
+  isExpressCheckout?: boolean;
 }
 
 const corsHeaders = {
@@ -63,7 +64,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
     }
 
     const body = JSON.parse(event.body || '{}') as RequestBody;
-    const { items, includeCprSign, customerDetails, paymentIntentId } = body;
+    const { items, includeCprSign, customerDetails, paymentIntentId, isExpressCheckout } = body;
 
     // Calculate expected amount
     const basePrice = items.find(item => item.id === 'pool-inspection')?.price || 210;
@@ -72,6 +73,16 @@ export const handler: Handler = async (event: HandlerEvent) => {
     
     // Convert amount to cents
     const amountInCents = Math.round(expectedAmount * 100);
+
+    // Log the payment details for debugging
+    console.log('Payment Details:', {
+      basePrice,
+      cprSignPrice,
+      expectedAmount,
+      amountInCents,
+      includeCprSign,
+      isExpressCheckout
+    });
 
     // Prepare metadata with customer details
     const metadata: Record<string, string> = {
@@ -105,17 +116,22 @@ export const handler: Handler = async (event: HandlerEvent) => {
 
     let paymentIntent;
 
-    if (paymentIntentId) {
-      // Update existing payment intent
-      paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
-        amount: amountInCents,
-        metadata,
-        description,
-        receipt_email: customerEmail,
-      });
-    } else {
-      // Create new payment intent
+    // For express checkout, always create a new payment intent
+    if (isExpressCheckout) {
       paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+    } else {
+      if (paymentIntentId) {
+        // Update existing payment intent
+        paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
+          amount: amountInCents,
+          metadata,
+          description,
+          receipt_email: customerEmail,
+        });
+      } else {
+        // Create new payment intent
+        paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+      }
     }
 
     return {

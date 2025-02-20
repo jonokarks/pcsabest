@@ -140,26 +140,31 @@ export default function CheckoutClient() {
         ...(includeCprSign ? [cprSignService] : [])
       ];
 
-      // Update payment intent with express checkout details
+      const basePrice = defaultService.price;
+      const cprSignPrice = includeCprSign ? cprSignService.price : 0;
+      const expressTotal = basePrice + cprSignPrice;
+
+      // Create a new payment intent for express checkout
       const response = await fetch('/.netlify/functions/create-payment-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: total,
+          amount: expressTotal,
           items,
           includeCprSign,
           customerDetails: {
             ...formData,
             ...data,
           },
-          paymentIntentId,
+          isExpressCheckout: true,
+          paymentIntentId: null,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update payment intent');
+        throw new Error('Failed to create payment intent');
       }
 
       const result = await response.json();

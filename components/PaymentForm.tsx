@@ -70,64 +70,77 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     let mounted = true;
 
     const initializePaymentRequest = async () => {
-      // Clear existing payment request
-      if (prRef.current) {
-        setPaymentRequest(null);
-        updatePaymentRequestVisibility(false);
-        prRef.current = null;
-      }
+      try {
+        // Clear existing payment request
+        if (prRef.current) {
+          setPaymentRequest(null);
+          updatePaymentRequestVisibility(false);
+          prRef.current = null;
+        }
 
-      const pr = stripe.paymentRequest({
-        country: 'AU',
-        currency: 'aud',
-        total: {
-          label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-          amount: amount * 100,
-        },
-        requestShipping: false,
-        requestPayerName: true,
-        requestPayerEmail: true,
-        disableWallets: ['link'],
-      });
-
-      const result = await pr.canMakePayment();
-      if (mounted && result) {
-        prRef.current = pr;
-        setPaymentRequest(pr);
-        updatePaymentRequestVisibility(true);
-
-        // Handle payment request button events
-        pr.on('paymentmethod', async (event: any) => {
-          try {
-            setError(null);
-
-            const { clientSecret: newClientSecret } = await onSubmit({
-              name: event.payerName || '',
-              email: event.payerEmail || '',
-              paymentMethod: event.paymentMethod.type,
-            });
-
-            const { error: confirmError } = await stripe.confirmCardPayment(
-              newClientSecret || clientSecret,
-              {
-                payment_method: event.paymentMethod.id,
-                receipt_email: event.payerEmail,
-              }
-            );
-
-            if (confirmError) {
-              event.complete('fail');
-              throw new Error(confirmError.message);
-            }
-
-            event.complete('success');
-            router.push("/checkout/success");
-          } catch (error: any) {
-            console.error('Express payment error:', error);
-            setError(error.message || 'Payment failed. Please try again.');
-            event.complete('fail');
-          }
+        const pr = stripe.paymentRequest({
+          country: 'AU',
+          currency: 'aud',
+          total: {
+            label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+            amount: amount * 100,
+          },
+          requestShipping: false,
+          requestPayerName: true,
+          requestPayerEmail: true,
+          disableWallets: ['link'],
         });
+
+        const result = await pr.canMakePayment();
+        if (mounted && result) {
+          prRef.current = pr;
+          setPaymentRequest(pr);
+          updatePaymentRequestVisibility(true);
+
+          // Handle payment request button events
+          pr.on('paymentmethod', async (event: any) => {
+            try {
+              setError(null);
+
+              // Update the payment request amount before proceeding
+              await pr.update({
+                total: {
+                  label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+                  amount: amount * 100,
+                },
+              });
+
+              const { clientSecret: newClientSecret } = await onSubmit({
+                name: event.payerName || '',
+                email: event.payerEmail || '',
+                paymentMethod: event.paymentMethod.type,
+              });
+
+              const { error: confirmError } = await stripe.confirmCardPayment(
+                newClientSecret || clientSecret,
+                {
+                  payment_method: event.paymentMethod.id,
+                  receipt_email: event.payerEmail,
+                }
+              );
+
+              if (confirmError) {
+                event.complete('fail');
+                throw new Error(confirmError.message);
+              }
+
+              event.complete('success');
+              router.push("/checkout/success");
+            } catch (error: any) {
+              console.error('Express payment error:', error);
+              setError(error.message || 'Payment failed. Please try again.');
+              event.complete('fail');
+            }
+          });
+        }
+      } catch (error: any) {
+        console.error('Error initializing payment request:', error);
+        setError('Error initializing payment. Please try again.');
       }
     };
 
@@ -138,18 +151,6 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       updatePaymentRequestVisibility(false);
     };
   }, [stripe, elements, amount, onSubmit, router, clientSecret, updatePaymentRequestVisibility]);
-
-  // Update payment request amount when it changes
-  useEffect(() => {
-    if (prRef.current) {
-      prRef.current.update({
-        total: {
-          label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-          amount: amount * 100,
-        },
-      });
-    }
-  }, [amount]);
 
   useEffect(() => {
     if (!stripe || !elements) return;
