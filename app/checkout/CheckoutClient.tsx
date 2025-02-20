@@ -31,16 +31,34 @@ export default function CheckoutClient() {
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string>("");
   const [paymentIntentId, setPaymentIntentId] = useState<string>("");
+  const [formValid, setFormValid] = useState(false);
+  const [formData, setFormData] = useState<FormData | null>(null);
   
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormData>();
+    getValues,
+    trigger,
+  } = useForm<FormData>({
+    mode: 'onChange',
+  });
 
   const basePrice = defaultService.price;
   const cprSignPrice = 30;
   const total = basePrice + (includeCprSign ? cprSignPrice : 0);
+
+  // Update form validity whenever form state changes
+  useEffect(() => {
+    const checkFormValidity = async () => {
+      const isFormValid = await trigger();
+      setFormValid(isFormValid);
+      if (isFormValid) {
+        setFormData(getValues());
+      }
+    };
+    checkFormValidity();
+  }, [trigger, getValues, errors]);
 
   useEffect(() => {
     let mounted = true;
@@ -57,8 +75,16 @@ export default function CheckoutClient() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            amount: basePrice,
-            items: [defaultService],
+            amount: total,
+            items: [
+              defaultService,
+              ...(includeCprSign ? [{
+                id: "cpr-sign",
+                name: "CPR Sign",
+                price: cprSignPrice,
+                description: "CPR Sign for pool safety"
+              }] : [])
+            ],
           }),
         });
 
@@ -88,9 +114,13 @@ export default function CheckoutClient() {
     return () => {
       mounted = false;
     };
-  }, [basePrice]);
+  }, [total, includeCprSign]);
 
   const handleExpressPayment = async (data: { name?: string; email?: string; paymentMethod?: string }) => {
+    if (!formValid || !formData) {
+      throw new Error('Please fill in all required fields before proceeding with payment');
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -114,9 +144,7 @@ export default function CheckoutClient() {
           ],
           includeCprSign,
           customerDetails: {
-            firstName: data.name?.split(' ')[0] || '',
-            lastName: data.name?.split(' ').slice(1).join(' ') || '',
-            email: data.email || '',
+            ...formData,
             paymentMethod: data.paymentMethod,
           },
           paymentIntentId,
@@ -132,6 +160,8 @@ export default function CheckoutClient() {
       if (result.error) {
         throw new Error(result.error);
       }
+
+      router.push("/checkout/success");
     } catch (error: any) {
       setError(error.message || 'Error processing your payment. Please try again.');
       throw error;
@@ -448,16 +478,24 @@ export default function CheckoutClient() {
                   </div>
 
                   {/* Payment Section */}
-                  <div className="border-t pt-6">
-                    <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
-                    {clientSecret && (
+                  {formValid && clientSecret && (
+                    <div className="border-t pt-6">
+                      <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
                       <PaymentForm
                         clientSecret={clientSecret}
                         amount={total}
                         onSubmit={handleExpressPayment}
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
+
+                  {!formValid && (
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-700">
+                        Please fill in all required fields to proceed with payment.
+                      </p>
+                    </div>
+                  )}
 
                   {error && (
                     <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-lg">
@@ -477,9 +515,9 @@ export default function CheckoutClient() {
                   <div className="mt-6">
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !formValid}
                       className={`w-full bg-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-700 transition duration-300 ${
-                        isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+                        (isSubmitting || !formValid) ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
                       {isSubmitting ? 'Processing...' : `Pay $${total}`}

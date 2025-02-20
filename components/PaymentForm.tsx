@@ -99,7 +99,6 @@ function PaymentFormContent({ amount, onSubmit }: {
 
         // Complete the payment
         event.complete('success');
-        router.push("/checkout/success");
       } catch (error: any) {
         console.error('Express payment error:', error);
         event.complete('fail');
@@ -122,7 +121,6 @@ function PaymentFormContent({ amount, onSubmit }: {
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          {/* Stripe Badge */}
           <img
             src="https://b.stripecdn.com/site-srv/assets/img/v3/home/powered_by_stripe-f3c0a8c0e4da1c07adb12502a6f6e6ab.png"
             alt="Powered by Stripe"
@@ -136,7 +134,6 @@ function PaymentFormContent({ amount, onSubmit }: {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          {/* Payment Method Icons */}
           <img
             src="https://js.stripe.com/v3/fingerprinted/img/visa-729c05c240c4bdb47b03ac81d9945bfe.svg"
             alt="Visa"
