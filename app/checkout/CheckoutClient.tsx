@@ -42,7 +42,7 @@ export default function CheckoutClient() {
   const cprSignPrice = 30;
   const total = basePrice + (includeCprSign ? cprSignPrice : 0);
 
-  // Create initial payment intent
+  // Create payment intent only once when component mounts
   useEffect(() => {
     let mounted = true;
 
@@ -58,17 +58,8 @@ export default function CheckoutClient() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            amount: total,
-            items: [
-              defaultService,
-              ...(includeCprSign ? [{
-                id: "cpr-sign",
-                name: "CPR Sign",
-                price: cprSignPrice,
-                description: "CPR Sign for pool safety"
-              }] : [])
-            ],
-            includeCprSign,
+            amount: basePrice, // Only use base price initially
+            items: [defaultService],
           }),
         });
 
@@ -98,41 +89,7 @@ export default function CheckoutClient() {
     return () => {
       mounted = false;
     };
-  }, [includeCprSign, total]); // Re-create payment intent when CPR sign is toggled or total changes
-
-  // Update payment intent when CPR sign is toggled
-  useEffect(() => {
-    if (!paymentIntentId) return;
-
-    const updatePaymentIntent = async () => {
-      try {
-        await fetch('/.netlify/functions/create-payment-intent', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: total,
-            items: [
-              defaultService,
-              ...(includeCprSign ? [{
-                id: "cpr-sign",
-                name: "CPR Sign",
-                price: cprSignPrice,
-                description: "CPR Sign for pool safety"
-              }] : [])
-            ],
-            includeCprSign,
-            paymentIntentId,
-          }),
-        });
-      } catch (error) {
-        console.error('Error updating payment intent:', error);
-      }
-    };
-
-    updatePaymentIntent();
-  }, [includeCprSign, total, paymentIntentId]);
+  }, []); // Only run once when component mounts
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
