@@ -89,6 +89,8 @@ export default function CheckoutClient() {
                 description: "CPR Sign for pool safety"
               }] : [])
             ],
+            includeCprSign,
+            customerDetails: formData,
           }),
         });
 
@@ -118,7 +120,7 @@ export default function CheckoutClient() {
     return () => {
       mounted = false;
     };
-  }, [total, includeCprSign]);
+  }, [total, includeCprSign, formData]);
 
   const handleExpressPayment = async (data: { name?: string; email?: string; paymentMethod?: string }) => {
     if (!formValid || !formData) {
@@ -149,7 +151,7 @@ export default function CheckoutClient() {
           includeCprSign,
           customerDetails: {
             ...formData,
-            paymentMethod: data.paymentMethod,
+            ...data,
           },
           paymentIntentId,
         }),

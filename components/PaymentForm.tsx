@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   PaymentElement,
@@ -11,6 +11,7 @@ import {
 } from "@stripe/react-stripe-js";
 import type { Appearance } from '@stripe/stripe-js';
 import { useRouter } from "next/navigation";
+import debounce from 'lodash/debounce';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
@@ -53,9 +54,25 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   const [paymentRequest, setPaymentRequest] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Create and update payment request when amount changes
+  // Debounced update function for payment request
+  const updatePaymentRequest = useCallback(
+    debounce((pr: any, newAmount: number) => {
+      if (pr) {
+        pr.update({
+          total: {
+            label: 'Pool Safety Inspection',
+            amount: newAmount * 100, // Convert to cents
+          },
+        });
+      }
+    }, 300),
+    []
+  );
+
+  // Create payment request when amount changes
   useEffect(() => {
     if (!stripe || !elements) return;
+    let mounted = true;
 
     const pr = stripe.paymentRequest({
       country: 'AU',
@@ -85,6 +102,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
           newClientSecret || clientSecret, // Fallback to original client secret if no new one
           {
             payment_method: event.paymentMethod.id,
+            receipt_email: event.payerEmail,
           }
         );
 
@@ -109,27 +127,21 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
     // Check if the Payment Request is available
     pr.canMakePayment().then(result => {
-      if (result) {
+      if (mounted && result) {
         setPaymentRequest(pr);
       }
     });
 
     return () => {
+      mounted = false;
       setPaymentRequest(null);
     };
   }, [stripe, elements, amount, onSubmit, router, clientSecret]);
 
   // Update payment request amount when total changes
   useEffect(() => {
-    if (paymentRequest) {
-      paymentRequest.update({
-        total: {
-          label: 'Pool Safety Inspection',
-          amount: amount * 100, // Convert to cents
-        },
-      });
-    }
-  }, [amount, paymentRequest]);
+    updatePaymentRequest(paymentRequest, amount);
+  }, [amount, paymentRequest, updatePaymentRequest]);
 
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -142,6 +154,9 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       const result = await stripe.confirmPayment({
         elements,
         redirect: "if_required",
+        confirmParams: {
+          return_url: window.location.origin + "/checkout/success",
+        },
       });
 
       if (result.error) {

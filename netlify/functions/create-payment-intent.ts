@@ -16,6 +16,7 @@ interface CustomerDetails {
   postcode?: string;
   preferredDate?: string;
   notes?: string;
+  paymentMethod?: string;
 }
 
 interface Item {
@@ -67,25 +68,32 @@ export const handler: Handler = async (event: HandlerEvent) => {
     // Convert amount to cents
     const amountInCents = Math.round(amount * 100);
 
-    if (paymentIntentId) {
-      // Update both amount and metadata
-      const metadata: Record<string, string> = {
-        firstName: customerDetails?.firstName || '',
-        lastName: customerDetails?.lastName || '',
-        email: customerDetails?.email || '',
-        phone: customerDetails?.phone || '',
-        address: customerDetails?.address || '',
-        suburb: customerDetails?.suburb || '',
-        postcode: customerDetails?.postcode || '',
-        preferredDate: customerDetails?.preferredDate || '',
-        notes: customerDetails?.notes || '',
-        includeCprSign: includeCprSign ? "true" : "false",
-        items: JSON.stringify(items.map(item => item.name))
-      };
+    // Prepare metadata with customer details
+    const metadata: Record<string, string> = {
+      firstName: customerDetails?.firstName || '',
+      lastName: customerDetails?.lastName || '',
+      email: customerDetails?.email || '',
+      phone: customerDetails?.phone || '',
+      address: customerDetails?.address || '',
+      suburb: customerDetails?.suburb || '',
+      postcode: customerDetails?.postcode || '',
+      preferredDate: customerDetails?.preferredDate || '',
+      notes: customerDetails?.notes || '',
+      includeCprSign: includeCprSign ? "true" : "false",
+      items: JSON.stringify(items.map(item => item.name))
+    };
 
+    // Prepare customer email data
+    const customerEmail = customerDetails?.email;
+    const description = `Pool Safety Inspection${includeCprSign ? ' with CPR Sign' : ''}`;
+
+    if (paymentIntentId) {
+      // Update existing payment intent
       const updatedIntent = await stripe.paymentIntents.update(paymentIntentId, {
         amount: amountInCents,
-        metadata
+        metadata,
+        description,
+        receipt_email: customerEmail,
       });
 
       return {
@@ -102,19 +110,16 @@ export const handler: Handler = async (event: HandlerEvent) => {
         }),
       };
     } else {
-      // Create new payment intent with amount and items
+      // Create new payment intent
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amountInCents,
         currency: "aud",
         automatic_payment_methods: {
           enabled: true,
         },
-        metadata: {
-          service: "Pool Compliance Inspection",
-          includeCprSign: includeCprSign ? "true" : "false",
-          items: JSON.stringify(items.map(item => item.name)),
-          timestamp: new Date().toISOString(),
-        },
+        metadata,
+        description,
+        receipt_email: customerEmail,
       });
 
       return {
