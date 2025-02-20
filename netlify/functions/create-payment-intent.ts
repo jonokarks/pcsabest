@@ -87,55 +87,45 @@ export const handler: Handler = async (event: HandlerEvent) => {
     const customerEmail = customerDetails?.email;
     const description = `Pool Safety Inspection${includeCprSign ? ' with CPR Sign' : ''}`;
 
+    const paymentIntentData = {
+      amount: amountInCents,
+      currency: "aud",
+      metadata,
+      description,
+      receipt_email: customerEmail,
+      automatic_payment_methods: {
+        enabled: true,
+      } as const,
+    };
+
+    let paymentIntent;
+
     if (paymentIntentId) {
       // Update existing payment intent
-      const updatedIntent = await stripe.paymentIntents.update(paymentIntentId, {
+      paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
         amount: amountInCents,
         metadata,
         description,
         receipt_email: customerEmail,
       });
-
-      return {
-        statusCode: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        } as const,
-        body: JSON.stringify({
-          clientSecret: updatedIntent.client_secret,
-          paymentIntentId: updatedIntent.id,
-        }),
-      };
     } else {
       // Create new payment intent
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: amountInCents,
-        currency: "aud",
-        automatic_payment_methods: {
-          enabled: true,
-        },
-        metadata,
-        description,
-        receipt_email: customerEmail,
-      });
-
-      return {
-        statusCode: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        } as const,
-        body: JSON.stringify({
-          clientSecret: paymentIntent.client_secret,
-          paymentIntentId: paymentIntent.id,
-        }),
-      };
+      paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
     }
+
+    return {
+      statusCode: 200,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      } as const,
+      body: JSON.stringify({
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+      }),
+    };
   } catch (error) {
     console.error("Error in payment intent function:", error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

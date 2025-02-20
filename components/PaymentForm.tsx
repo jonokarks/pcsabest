@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   PaymentElement,
@@ -53,19 +53,14 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
   const [paymentRequest, setPaymentRequest] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPaymentRequestVisible, setIsPaymentRequestVisible] = useState(false);
+  const prRef = useRef<any>(null);
 
-  // Debounced update function for payment request
-  const updatePaymentRequest = useCallback(
-    debounce((pr: any, newAmount: number) => {
-      if (pr) {
-        pr.update({
-          total: {
-            label: 'Pool Safety Inspection',
-            amount: newAmount * 100, // Convert to cents
-          },
-        });
-      }
-    }, 300),
+  // Debounced visibility update
+  const updatePaymentRequestVisibility = useCallback(
+    debounce((shouldShow: boolean) => {
+      setIsPaymentRequestVisible(shouldShow);
+    }, 500),
     []
   );
 
@@ -74,74 +69,86 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     if (!stripe || !elements) return;
     let mounted = true;
 
-    const pr = stripe.paymentRequest({
-      country: 'AU',
-      currency: 'aud',
-      total: {
-        label: 'Pool Safety Inspection',
-        amount: amount * 100, // Convert to cents
-      },
-      requestPayerName: true,
-      requestPayerEmail: true,
-    });
+    const createPaymentRequest = async () => {
+      const pr = stripe.paymentRequest({
+        country: 'AU',
+        currency: 'aud',
+        total: {
+          label: 'Pool Safety Inspection',
+          amount: amount * 100, // Convert to cents
+        },
+        requestPayerName: true,
+        requestPayerEmail: true,
+      });
 
-    // Handle payment request button events
-    pr.on('paymentmethod', async (event) => {
-      try {
-        setError(null);
-
-        // First update customer details and get new client secret
-        const { clientSecret: newClientSecret } = await onSubmit({
-          name: event.payerName || '',
-          email: event.payerEmail || '',
-          paymentMethod: event.paymentMethod.type,
-        });
-
-        // Then confirm the payment with the updated client secret
-        const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
-          newClientSecret || clientSecret, // Fallback to original client secret if no new one
-          {
-            payment_method: event.paymentMethod.id,
-            receipt_email: event.payerEmail,
-          }
-        );
-
-        if (confirmError) {
-          throw new Error(confirmError.message);
-        }
-
-        // Complete the payment request
-        event.complete('success');
-
-        if (paymentIntent.status === 'succeeded') {
-          router.push("/checkout/success");
-        } else {
-          throw new Error('Payment failed');
-        }
-      } catch (error: any) {
-        console.error('Express payment error:', error);
-        setError(error.message || 'Payment failed. Please try again.');
-        event.complete('fail');
-      }
-    });
-
-    // Check if the Payment Request is available
-    pr.canMakePayment().then(result => {
+      // Check if the Payment Request is available
+      const result = await pr.canMakePayment();
       if (mounted && result) {
+        prRef.current = pr;
         setPaymentRequest(pr);
+        updatePaymentRequestVisibility(true);
       }
-    });
+
+      // Handle payment request button events
+      pr.on('paymentmethod', async (event) => {
+        try {
+          setError(null);
+
+          // First update customer details and get new client secret
+          const { clientSecret: newClientSecret } = await onSubmit({
+            name: event.payerName || '',
+            email: event.payerEmail || '',
+            paymentMethod: event.paymentMethod.type,
+          });
+
+          // Then confirm the payment with the updated client secret
+          const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+            newClientSecret || clientSecret,
+            {
+              payment_method: event.paymentMethod.id,
+              receipt_email: event.payerEmail,
+            }
+          );
+
+          if (confirmError) {
+            throw new Error(confirmError.message);
+          }
+
+          // Complete the payment request
+          event.complete('success');
+
+          if (paymentIntent.status === 'succeeded') {
+            router.push("/checkout/success");
+          } else {
+            throw new Error('Payment failed');
+          }
+        } catch (error: any) {
+          console.error('Express payment error:', error);
+          setError(error.message || 'Payment failed. Please try again.');
+          event.complete('fail');
+        }
+      });
+    };
+
+    createPaymentRequest();
 
     return () => {
       mounted = false;
-      setPaymentRequest(null);
+      updatePaymentRequestVisibility(false);
     };
-  }, [stripe, elements, amount, onSubmit, router, clientSecret]);
+  }, [stripe, elements, amount, onSubmit, router, clientSecret, updatePaymentRequestVisibility]);
 
   // Update payment request amount when total changes
   useEffect(() => {
-    updatePaymentRequest(paymentRequest, amount);
-  }, [amount, paymentRequest, updatePaymentRequest]);
+    if (prRef.current) {
+      prRef.current.update({
+        total: {
+          label: 'Pool Safety Inspection',
+          amount: amount * 100, // Convert to cents
+        },
+      });
+    }
+  }, [amount]);
 
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -213,7 +220,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         </div>
       </div>
 
-      {paymentRequest && (
+      {paymentRequest && isPaymentRequestVisible && (
         <div className="mb-4">
           <PaymentRequestButtonElement
             options={{
