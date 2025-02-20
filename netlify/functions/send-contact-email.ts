@@ -1,5 +1,5 @@
 import { Handler } from '@netlify/functions';
-import * as nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 
 const handler: Handler = async (event) => {
   // Only allow POST
@@ -21,21 +21,16 @@ const handler: Handler = async (event) => {
       };
     }
 
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
-      secure: true,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-      },
-    });
+    // Initialize SendGrid
+    if (!process.env.SENDGRID_API_KEY) {
+      throw new Error('SENDGRID_API_KEY is not set');
+    }
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
     // Email content
-    const mailOptions = {
-      from: process.env.SMTP_USER,
+    const msg = {
       to: 'info@poolcompliancesa.com.au',
+      from: process.env.VERIFIED_SENDER || 'info@poolcompliancesa.com.au', // Must be verified in SendGrid
       subject: 'New Contact Form Submission',
       html: `
         <h2>New Contact Form Submission</h2>
@@ -45,10 +40,11 @@ const handler: Handler = async (event) => {
         <p><strong>Message:</strong></p>
         <p>${message}</p>
       `,
+      replyTo: email,
     };
 
     // Send email
-    await transporter.sendMail(mailOptions);
+    await sgMail.send(msg);
 
     return {
       statusCode: 200,
@@ -56,9 +52,17 @@ const handler: Handler = async (event) => {
     };
   } catch (error) {
     console.error('Error sending email:', error);
+    
+    // More detailed error logging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Detailed error:', errorMessage);
+    
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: 'Error sending email' }),
+      body: JSON.stringify({ 
+        message: 'Error sending email',
+        error: errorMessage 
+      }),
     };
   }
 };

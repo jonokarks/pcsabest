@@ -11,7 +11,7 @@ export default function ContactPage() {
 
     try {
       const formData = new FormData(e.currentTarget);
-      const data = {
+      const formValues = {
         name: formData.get('name'),
         email: formData.get('email'),
         phone: formData.get('phone'),
@@ -23,17 +23,23 @@ export default function ContactPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(formValues),
       });
 
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        throw new Error(responseData.error || 'Failed to send message');
       }
 
       setFormStatus("success");
     } catch (error) {
       console.error('Error sending message:', error);
       setFormStatus("error");
+      // Log the error for debugging in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Detailed error:', error);
+      }
     }
   };
 
