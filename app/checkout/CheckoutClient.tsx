@@ -131,6 +131,7 @@ export default function CheckoutClient() {
       throw new Error('Please fill in all required fields before proceeding with payment');
     }
 
+    console.log('Starting express payment with amount:', total);
     setIsSubmitting(true);
     setError(null);
 
@@ -140,8 +141,13 @@ export default function CheckoutClient() {
         ...(includeCprSign ? [cprSignService] : [])
       ];
 
+      console.log('Express payment items:', items);
+      console.log('Express payment total:', total);
+      console.log('Express payment includeCprSign:', includeCprSign);
+
       // Create a new payment intent for express checkout
       // Use the same total calculation as the main form
+      console.log('Creating new payment intent for express checkout');
       const response = await fetch('/.netlify/functions/create-payment-intent', {
         method: 'POST',
         headers: {
@@ -161,12 +167,15 @@ export default function CheckoutClient() {
       });
 
       if (!response.ok) {
+        console.error('Failed to create payment intent:', response.status, response.statusText);
         throw new Error('Failed to create payment intent');
       }
 
       const result = await response.json();
+      console.log('Payment intent created:', result);
       
       if (result.error) {
+        console.error('Payment intent error:', result.error);
         throw new Error(result.error);
       }
 

@@ -67,7 +67,8 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   // Create payment request instance
   const createPaymentRequest = useCallback(() => {
     if (!stripe) return null;
-    return stripe.paymentRequest({
+    console.log('Creating payment request with amount:', amount);
+    const pr = stripe.paymentRequest({
       country: 'AU',
       currency: 'aud',
       total: {
@@ -79,6 +80,8 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       requestPayerEmail: true,
       disableWallets: ['link'],
     });
+    console.log('Payment request created:', pr);
+    return pr;
   }, [stripe, amount]);
 
   // Initialize payment request
@@ -88,8 +91,11 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
     const initializePaymentRequest = async () => {
       try {
+        console.log('Initializing payment request with amount:', amount);
+        
         // Clear existing payment request
         if (prRef.current) {
+          console.log('Cleaning up existing payment request');
           prRef.current.removeAllListeners();
           prRef.current = null;
         }
@@ -98,26 +104,39 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
         // Create new payment request with current amount
         const pr = createPaymentRequest();
-        if (!pr) return;
+        if (!pr) {
+          console.log('Failed to create payment request');
+          return;
+        }
 
+        console.log('Checking if payment method is available');
         const result = await pr.canMakePayment();
-        if (!mounted) return;
+        console.log('Can make payment result:', result);
+        
+        if (!mounted) {
+          console.log('Component unmounted, aborting initialization');
+          return;
+        }
 
         if (result) {
+          console.log('Payment method is available, setting up request');
           prRef.current = pr;
           setPaymentRequest(pr);
           updatePaymentRequestVisibility(true);
 
           // Handle payment request button events
           pr.on('paymentmethod', async (event: any) => {
+            console.log('Payment method event received:', event);
             try {
               setError(null);
+              console.log('Submitting payment with amount:', amount);
               const { clientSecret: newClientSecret } = await onSubmit({
                 name: event.payerName || '',
                 email: event.payerEmail || '',
                 paymentMethod: event.paymentMethod.type,
               });
 
+              console.log('Confirming payment with new client secret');
               const { error: confirmError } = await stripe.confirmCardPayment(
                 newClientSecret || clientSecret,
                 {
@@ -127,10 +146,12 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
               );
 
               if (confirmError) {
+                console.error('Payment confirmation error:', confirmError);
                 event.complete('fail');
                 throw new Error(confirmError.message);
               }
 
+              console.log('Payment successful, redirecting');
               event.complete('success');
               router.push("/checkout/success");
             } catch (error: any) {
@@ -139,6 +160,8 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
               event.complete('fail');
             }
           });
+        } else {
+          console.log('Payment method is not available');
         }
       } catch (error: any) {
         console.error('Error initializing payment request:', error);

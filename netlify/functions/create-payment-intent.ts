@@ -103,35 +103,59 @@ export const handler: Handler = async (event: HandlerEvent) => {
     const customerEmail = customerDetails?.email;
     const description = `Pool Safety Inspection${includeCprSign ? ' with CPR Sign' : ''}`;
 
+    // Log payment intent creation details
+    console.log('Creating payment intent with:', {
+      amountInCents,
+      description,
+      includeCprSign,
+      isExpressCheckout
+    });
+
     const paymentIntentData = {
       amount: amountInCents,
       currency: "aud",
       metadata,
       description,
       receipt_email: customerEmail,
+      payment_method_types: ['card', 'apple_pay', 'google_pay'],
       automatic_payment_methods: {
         enabled: true,
+        allow_redirects: 'never'
       } as const,
     };
 
     let paymentIntent;
 
-    // For express checkout, always create a new payment intent
-    if (isExpressCheckout) {
-      paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
-    } else {
-      if (paymentIntentId) {
-        // Update existing payment intent
-        paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
-          amount: amountInCents,
-          metadata,
-          description,
-          receipt_email: customerEmail,
-        });
-      } else {
-        // Create new payment intent
+    try {
+      // For express checkout, always create a new payment intent
+      if (isExpressCheckout) {
+        console.log('Creating new payment intent for express checkout');
         paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+      } else {
+        if (paymentIntentId) {
+          console.log('Updating existing payment intent:', paymentIntentId);
+          // Update existing payment intent
+          paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
+            amount: amountInCents,
+            metadata,
+            description,
+            receipt_email: customerEmail,
+          });
+        } else {
+          console.log('Creating new payment intent');
+          // Create new payment intent
+          paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+        }
       }
+
+      console.log('Payment intent operation successful:', {
+        id: paymentIntent.id,
+        amount: paymentIntent.amount,
+        status: paymentIntent.status
+      });
+    } catch (error) {
+      console.error('Error in payment intent operation:', error);
+      throw error;
     }
 
     return {
