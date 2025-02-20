@@ -63,10 +63,15 @@ export const handler: Handler = async (event: HandlerEvent) => {
     }
 
     const body = JSON.parse(event.body || '{}') as RequestBody;
-    const { amount, items, includeCprSign, customerDetails, paymentIntentId } = body;
+    const { items, includeCprSign, customerDetails, paymentIntentId } = body;
 
+    // Calculate expected amount
+    const basePrice = items.find(item => item.id === 'pool-inspection')?.price || 210;
+    const cprSignPrice = includeCprSign ? 30 : 0;
+    const expectedAmount = basePrice + cprSignPrice;
+    
     // Convert amount to cents
-    const amountInCents = Math.round(amount * 100);
+    const amountInCents = Math.round(expectedAmount * 100);
 
     // Prepare metadata with customer details
     const metadata: Record<string, string> = {

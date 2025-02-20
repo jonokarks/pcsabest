@@ -1,15 +1,23 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import PaymentForm from "@/components/PaymentForm";
+import debounce from 'lodash/debounce';
 
 const defaultService = {
   id: "pool-inspection",
   name: "Pool Safety Inspection",
   price: 210,
   description: "Comprehensive pool safety inspection to ensure compliance with current regulations."
+};
+
+const cprSignService = {
+  id: "cpr-sign",
+  name: "CPR Sign",
+  price: 30,
+  description: "CPR Sign for pool safety"
 };
 
 interface FormData {
@@ -45,7 +53,7 @@ export default function CheckoutClient() {
   });
 
   const basePrice = defaultService.price;
-  const cprSignPrice = 30;
+  const cprSignPrice = cprSignService.price;
   const total = basePrice + (includeCprSign ? cprSignPrice : 0);
 
   // Watch all form fields for changes
@@ -64,14 +72,9 @@ export default function CheckoutClient() {
     return () => subscription.unsubscribe();
   }, [watch, getValues]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const createInitialPaymentIntent = async () => {
-      if (!mounted) return;
-      
-      setError(null);
-      
+  // Debounced payment intent update
+  const updatePaymentIntent = useCallback(
+    debounce(async (amount: number, items: any[], includeCprSign: boolean, customerDetails: any | null, paymentIntentId: string | null) => {
       try {
         const response = await fetch('/.netlify/functions/create-payment-intent', {
           method: 'POST',
@@ -79,25 +82,16 @@ export default function CheckoutClient() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            amount: total,
-            items: [
-              defaultService,
-              ...(includeCprSign ? [{
-                id: "cpr-sign",
-                name: "CPR Sign",
-                price: cprSignPrice,
-                description: "CPR Sign for pool safety"
-              }] : [])
-            ],
+            amount,
+            items,
             includeCprSign,
-            customerDetails: formData,
+            customerDetails,
+            paymentIntentId,
           }),
         });
 
-        if (!mounted) return;
-
         if (!response.ok) {
-          throw new Error('Failed to create payment intent');
+          throw new Error('Failed to update payment intent');
         }
 
         const data = await response.json();
@@ -109,18 +103,28 @@ export default function CheckoutClient() {
           throw new Error('No client secret or payment intent ID in response');
         }
       } catch (error) {
-        if (mounted) {
-          setError('Error initializing payment. Please refresh the page and try again.');
-        }
+        console.error('Error updating payment intent:', error);
+        setError('Error updating payment. Please refresh the page and try again.');
       }
-    };
+    }, 300),
+    []
+  );
 
-    createInitialPaymentIntent();
+  // Update payment intent when total or form data changes
+  useEffect(() => {
+    const items = [
+      defaultService,
+      ...(includeCprSign ? [cprSignService] : [])
+    ];
 
-    return () => {
-      mounted = false;
-    };
-  }, [total, includeCprSign, formData]);
+    updatePaymentIntent(
+      total,
+      items,
+      includeCprSign,
+      formData,
+      paymentIntentId
+    );
+  }, [total, includeCprSign, formData, paymentIntentId, updatePaymentIntent]);
 
   const handleExpressPayment = async (data: { name?: string; email?: string; paymentMethod?: string }) => {
     if (!formValid || !formData) {
@@ -131,6 +135,11 @@ export default function CheckoutClient() {
     setError(null);
 
     try {
+      const items = [
+        defaultService,
+        ...(includeCprSign ? [cprSignService] : [])
+      ];
+
       // Update payment intent with express checkout details
       const response = await fetch('/.netlify/functions/create-payment-intent', {
         method: 'POST',
@@ -139,15 +148,7 @@ export default function CheckoutClient() {
         },
         body: JSON.stringify({
           amount: total,
-          items: [
-            defaultService,
-            ...(includeCprSign ? [{
-              id: "cpr-sign",
-              name: "CPR Sign",
-              price: cprSignPrice,
-              description: "CPR Sign for pool safety"
-            }] : [])
-          ],
+          items,
           includeCprSign,
           customerDetails: {
             ...formData,
@@ -182,6 +183,11 @@ export default function CheckoutClient() {
     setError(null);
 
     try {
+      const items = [
+        defaultService,
+        ...(includeCprSign ? [cprSignService] : [])
+      ];
+
       const response = await fetch('/.netlify/functions/create-payment-intent', {
         method: 'POST',
         headers: {
@@ -189,15 +195,7 @@ export default function CheckoutClient() {
         },
         body: JSON.stringify({
           amount: total,
-          items: [
-            defaultService,
-            ...(includeCprSign ? [{
-              id: "cpr-sign",
-              name: "CPR Sign",
-              price: cprSignPrice,
-              description: "CPR Sign for pool safety"
-            }] : [])
-          ],
+          items,
           includeCprSign,
           customerDetails: data,
           paymentIntentId,
