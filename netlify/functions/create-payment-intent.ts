@@ -117,10 +117,8 @@ export const handler: Handler = async (event: HandlerEvent) => {
       metadata,
       description,
       receipt_email: customerEmail,
-      payment_method_types: ['card', 'apple_pay', 'google_pay'],
       automatic_payment_methods: {
         enabled: true,
-        allow_redirects: 'never'
       } as const,
     };
 

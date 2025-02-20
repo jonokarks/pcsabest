@@ -91,52 +91,36 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
     const initializePaymentRequest = async () => {
       try {
-        console.log('Initializing payment request with amount:', amount);
-        
         // Clear existing payment request
         if (prRef.current) {
-          console.log('Cleaning up existing payment request');
           prRef.current.removeAllListeners();
           prRef.current = null;
         }
         setPaymentRequest(null);
-        updatePaymentRequestVisibility(false);
+        setIsPaymentRequestVisible(false); // Immediately hide without debounce
 
         // Create new payment request with current amount
         const pr = createPaymentRequest();
-        if (!pr) {
-          console.log('Failed to create payment request');
-          return;
-        }
+        if (!pr) return;
 
-        console.log('Checking if payment method is available');
         const result = await pr.canMakePayment();
-        console.log('Can make payment result:', result);
-        
-        if (!mounted) {
-          console.log('Component unmounted, aborting initialization');
-          return;
-        }
+        if (!mounted) return;
 
         if (result) {
-          console.log('Payment method is available, setting up request');
           prRef.current = pr;
           setPaymentRequest(pr);
-          updatePaymentRequestVisibility(true);
+          setIsPaymentRequestVisible(true); // Immediately show without debounce
 
           // Handle payment request button events
           pr.on('paymentmethod', async (event: any) => {
-            console.log('Payment method event received:', event);
             try {
               setError(null);
-              console.log('Submitting payment with amount:', amount);
               const { clientSecret: newClientSecret } = await onSubmit({
                 name: event.payerName || '',
                 email: event.payerEmail || '',
                 paymentMethod: event.paymentMethod.type,
               });
 
-              console.log('Confirming payment with new client secret');
               const { error: confirmError } = await stripe.confirmCardPayment(
                 newClientSecret || clientSecret,
                 {
@@ -146,22 +130,17 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
               );
 
               if (confirmError) {
-                console.error('Payment confirmation error:', confirmError);
                 event.complete('fail');
                 throw new Error(confirmError.message);
               }
 
-              console.log('Payment successful, redirecting');
               event.complete('success');
               router.push("/checkout/success");
             } catch (error: any) {
-              console.error('Express payment error:', error);
               setError(error.message || 'Payment failed. Please try again.');
               event.complete('fail');
             }
           });
-        } else {
-          console.log('Payment method is not available');
         }
       } catch (error: any) {
         console.error('Error initializing payment request:', error);

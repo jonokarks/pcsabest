@@ -112,26 +112,32 @@ export default function CheckoutClient() {
 
   // Update payment intent when total or form data changes
   useEffect(() => {
+    if (!formValid || !formData) return; // Only update if form is valid and has data
+
     const items = [
       defaultService,
       ...(includeCprSign ? [cprSignService] : [])
     ];
+
+    // Reset payment intent when amount changes
+    if (paymentIntentId) {
+      setPaymentIntentId(''); // Force creation of new payment intent
+    }
 
     updatePaymentIntent(
       total,
       items,
       includeCprSign,
       formData,
-      paymentIntentId
+      null // Always create new payment intent when amount changes
     );
-  }, [total, includeCprSign, formData, paymentIntentId, updatePaymentIntent]);
+  }, [total, includeCprSign, formData, formValid, updatePaymentIntent]);
 
   const handleExpressPayment = async (data: { name?: string; email?: string; paymentMethod?: string }) => {
     if (!formValid || !formData) {
       throw new Error('Please fill in all required fields before proceeding with payment');
     }
 
-    console.log('Starting express payment with amount:', total);
     setIsSubmitting(true);
     setError(null);
 
@@ -141,13 +147,7 @@ export default function CheckoutClient() {
         ...(includeCprSign ? [cprSignService] : [])
       ];
 
-      console.log('Express payment items:', items);
-      console.log('Express payment total:', total);
-      console.log('Express payment includeCprSign:', includeCprSign);
-
       // Create a new payment intent for express checkout
-      // Use the same total calculation as the main form
-      console.log('Creating new payment intent for express checkout');
       const response = await fetch('/.netlify/functions/create-payment-intent', {
         method: 'POST',
         headers: {
