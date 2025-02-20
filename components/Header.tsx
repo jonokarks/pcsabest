@@ -34,10 +34,16 @@ export default function Header() {
             aria-label="Toggle menu"
             aria-expanded={isMenuOpen}
           >
-            <div className="w-6 h-4 flex flex-col justify-between">
-              <span className={`block w-full h-0.5 bg-gray-600 transition-transform duration-300 ${isMenuOpen ? 'rotate-45 translate-y-1.5' : ''}`} />
-              <span className={`block w-full h-0.5 bg-gray-600 transition-opacity duration-300 ${isMenuOpen ? 'opacity-0' : ''}`} />
-              <span className={`block w-full h-0.5 bg-gray-600 transition-transform duration-300 ${isMenuOpen ? '-rotate-45 -translate-y-1.5' : ''}`} />
+            <div className="w-6 h-[14px] relative">
+              <span className={`absolute top-0 left-0 w-full h-0.5 bg-gray-600 transition-all duration-300 ${
+                isMenuOpen ? 'top-[6px] rotate-45' : ''
+              }`} />
+              <span className={`absolute top-[6px] left-0 w-full h-0.5 bg-gray-600 transition-all duration-300 ${
+                isMenuOpen ? 'opacity-0' : ''
+              }`} />
+              <span className={`absolute bottom-0 left-0 w-full h-0.5 bg-gray-600 transition-all duration-300 ${
+                isMenuOpen ? 'bottom-[6px] -rotate-45' : ''
+              }`} />
             </div>
           </button>
 
