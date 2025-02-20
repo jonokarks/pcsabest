@@ -88,16 +88,22 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
     const initializePaymentRequest = async () => {
       try {
-        // Always create a new payment request instance
+        // Clear existing payment request
+        if (prRef.current) {
+          prRef.current.removeAllListeners();
+          prRef.current = null;
+        }
         setPaymentRequest(null);
         updatePaymentRequestVisibility(false);
-        prRef.current = null;
 
+        // Create new payment request with current amount
         const pr = createPaymentRequest();
         if (!pr) return;
 
         const result = await pr.canMakePayment();
-        if (mounted && result) {
+        if (!mounted) return;
+
+        if (result) {
           prRef.current = pr;
           setPaymentRequest(pr);
           updatePaymentRequestVisibility(true);
@@ -146,7 +152,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       mounted = false;
       updatePaymentRequestVisibility(false);
     };
-  }, [stripe, elements, amount, onSubmit, router, clientSecret, updatePaymentRequestVisibility]);
+  }, [stripe, elements, amount, onSubmit, router, clientSecret, updatePaymentRequestVisibility, createPaymentRequest]);
 
   useEffect(() => {
     if (!stripe || !elements) return;
