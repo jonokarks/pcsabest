@@ -37,27 +37,32 @@ export default function CheckoutClient() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isValid },
+    formState: { errors },
     getValues,
+    watch,
   } = useForm<FormData>({
-    mode: 'all',
-    reValidateMode: 'onChange',
+    mode: 'onChange',
   });
 
   const basePrice = defaultService.price;
   const cprSignPrice = 30;
   const total = basePrice + (includeCprSign ? cprSignPrice : 0);
 
-  // Update form validity whenever form state changes
+  // Watch all form fields for changes
   useEffect(() => {
-    if (isValid) {
-      setFormValid(true);
-      setFormData(getValues());
-    } else {
-      setFormValid(false);
-      setFormData(null);
-    }
-  }, [isValid, getValues]);
+    const subscription = watch(() => {
+      const values = getValues();
+      const isComplete = Object.keys(values).every(key => {
+        if (key === 'notes') return true; // Notes are optional
+        return values[key as keyof FormData];
+      });
+      setFormValid(isComplete);
+      if (isComplete) {
+        setFormData(values);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [watch, getValues]);
 
   useEffect(() => {
     let mounted = true;
@@ -160,7 +165,8 @@ export default function CheckoutClient() {
         throw new Error(result.error);
       }
 
-      router.push("/checkout/success");
+      // Return the new client secret
+      return { clientSecret: result.clientSecret };
     } catch (error: any) {
       setError(error.message || 'Error processing your payment. Please try again.');
       throw error;

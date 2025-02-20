@@ -38,7 +38,7 @@ interface PaymentFormProps {
     name?: string;
     email?: string;
     paymentMethod?: string;
-  }) => Promise<void>;
+  }) => Promise<{ clientSecret: string }>;
 }
 
 function PaymentFormContent({ amount, onSubmit, clientSecret }: { 
@@ -50,33 +50,12 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   const elements = useElements();
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
-  const [paymentRequest, setPaymentRequest] = useState(null);
+  const [paymentRequest, setPaymentRequest] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Create and update payment request when amount changes
   useEffect(() => {
     if (!stripe || !elements) return;
-
-    window.confirmStripePayment = async () => {
-      if (!stripe || !elements) {
-        throw new Error("Stripe not initialized");
-      }
-
-      const result = await stripe.confirmPayment({
-        elements,
-        redirect: "if_required",
-      });
-
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
-
-      const { id, status, client_secret } = result.paymentIntent;
-      return {
-        id,
-        status,
-        client_secret: client_secret || undefined,
-      };
-    };
 
     const pr = stripe.paymentRequest({
       country: 'AU',
@@ -94,16 +73,16 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       try {
         setError(null);
 
-        // First update customer details
-        await onSubmit({
+        // First update customer details and get new client secret
+        const { clientSecret: newClientSecret } = await onSubmit({
           name: event.payerName || '',
           email: event.payerEmail || '',
           paymentMethod: event.paymentMethod.type,
         });
 
-        // Then confirm the payment
+        // Then confirm the payment with the updated client secret
         const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
-          clientSecret,
+          newClientSecret || clientSecret, // Fallback to original client secret if no new one
           {
             payment_method: event.paymentMethod.id,
           }
@@ -131,14 +110,56 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     // Check if the Payment Request is available
     pr.canMakePayment().then(result => {
       if (result) {
-        setPaymentRequest(pr as any);
+        setPaymentRequest(pr);
       }
     });
 
     return () => {
-      window.confirmStripePayment = undefined;
+      setPaymentRequest(null);
     };
   }, [stripe, elements, amount, onSubmit, router, clientSecret]);
+
+  // Update payment request amount when total changes
+  useEffect(() => {
+    if (paymentRequest) {
+      paymentRequest.update({
+        total: {
+          label: 'Pool Safety Inspection',
+          amount: amount * 100, // Convert to cents
+        },
+      });
+    }
+  }, [amount, paymentRequest]);
+
+  useEffect(() => {
+    if (!stripe || !elements) return;
+
+    window.confirmStripePayment = async () => {
+      if (!stripe || !elements) {
+        throw new Error("Stripe not initialized");
+      }
+
+      const result = await stripe.confirmPayment({
+        elements,
+        redirect: "if_required",
+      });
+
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+
+      const { id, status, client_secret } = result.paymentIntent;
+      return {
+        id,
+        status,
+        client_secret: client_secret || undefined,
+      };
+    };
+
+    return () => {
+      window.confirmStripePayment = undefined;
+    };
+  }, [stripe, elements]);
 
   return (
     <div className="space-y-6">
