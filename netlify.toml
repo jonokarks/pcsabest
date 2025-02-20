@@ -1,0 +1,39 @@
+[build]
+  command = "npm ci && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_VERSION = "10"
+  NEXT_TELEMETRY_DISABLED = "1"
+  CI = "true"
+  NODE_OPTIONS = "--max_old_space_size=4096"
+  SECRETS_SCAN_ENABLED = "false"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/next"
+  status = 200
+  force = true
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["stripe"]
+  included_files = ["app/api/**/*"]
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Credentials = "true"
+    Cache-Control = "no-store"
+    Pragma = "no-cache"
+
+[functions.next]
+  included_files = ["app/api/**/*"]
+  external_node_modules = ["stripe"]
