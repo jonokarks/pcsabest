@@ -9,11 +9,32 @@ export default function ContactPage() {
     e.preventDefault();
     setFormStatus("submitting");
 
-    // In a real application, you would send this to your backend
-    // For now, we'll simulate a successful submission
-    setTimeout(() => {
+    try {
+      const formData = new FormData(e.currentTarget);
+      const data = {
+        name: formData.get('name'),
+        email: formData.get('email'),
+        phone: formData.get('phone'),
+        message: formData.get('message'),
+      };
+
+      const response = await fetch('/.netlify/functions/send-contact-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
       setFormStatus("success");
-    }, 1000);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setFormStatus("error");
+    }
   };
 
   return (

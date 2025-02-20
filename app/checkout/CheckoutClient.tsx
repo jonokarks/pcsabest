@@ -98,7 +98,7 @@ export default function CheckoutClient() {
     return () => {
       mounted = false;
     };
-  }, []); // Only create payment intent once when component mounts
+  }, [includeCprSign, total]); // Re-create payment intent when CPR sign is toggled or total changes
 
   // Update payment intent when CPR sign is toggled
   useEffect(() => {
