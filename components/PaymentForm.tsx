@@ -10,11 +10,10 @@ import {
   PaymentRequestButtonElement,
 } from "@stripe/react-stripe-js";
 import type { Appearance } from '@stripe/stripe-js';
+import { useRouter } from "next/navigation";
 
-// Load Stripe outside of component to avoid recreation
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
-// Define the options type
 type PaymentElementOptions = {
   clientSecret: string;
   appearance?: Appearance;
@@ -35,11 +34,20 @@ declare global {
 interface PaymentFormProps {
   clientSecret: string;
   amount: number;
+  onSubmit: (data: {
+    name?: string;
+    email?: string;
+    paymentMethod?: string;
+  }) => Promise<void>;
 }
 
-function PaymentFormContent({ amount }: { amount: number }) {
+function PaymentFormContent({ amount, onSubmit }: { 
+  amount: number;
+  onSubmit: PaymentFormProps['onSubmit'];
+}) {
   const stripe = useStripe();
   const elements = useElements();
+  const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
   const [paymentRequest, setPaymentRequest] = useState(null);
 
@@ -79,6 +87,25 @@ function PaymentFormContent({ amount }: { amount: number }) {
       requestPayerEmail: true,
     });
 
+    // Handle payment request button events
+    pr.on('paymentmethod', async (event) => {
+      try {
+        // Pass payer details to parent component
+        await onSubmit({
+          name: event.payerName || '',
+          email: event.payerEmail || '',
+          paymentMethod: event.paymentMethod.type,
+        });
+
+        // Complete the payment
+        event.complete('success');
+        router.push("/checkout/success");
+      } catch (error: any) {
+        console.error('Express payment error:', error);
+        event.complete('fail');
+      }
+    });
+
     // Check if the Payment Request is available
     pr.canMakePayment().then(result => {
       if (result) {
@@ -89,7 +116,7 @@ function PaymentFormContent({ amount }: { amount: number }) {
     return () => {
       window.confirmStripePayment = undefined;
     };
-  }, [stripe, elements, amount]);
+  }, [stripe, elements, amount, onSubmit, router]);
 
   return (
     <div className="space-y-6">
@@ -192,7 +219,7 @@ function PaymentFormContent({ amount }: { amount: number }) {
   );
 }
 
-export default function PaymentForm({ clientSecret, amount }: PaymentFormProps) {
+export default function PaymentForm({ clientSecret, amount, onSubmit }: PaymentFormProps) {
   const appearance: Appearance = {
     theme: 'stripe' as const,
     variables: {
@@ -223,7 +250,7 @@ export default function PaymentForm({ clientSecret, amount }: PaymentFormProps) 
 
   return (
     <StripeElements stripe={stripePromise} options={options}>
-      <PaymentFormContent amount={amount} />
+      <PaymentFormContent amount={amount} onSubmit={onSubmit} />
     </StripeElements>
   );
 }

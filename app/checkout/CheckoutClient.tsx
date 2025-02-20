@@ -90,6 +90,56 @@ export default function CheckoutClient() {
     };
   }, [basePrice]);
 
+  const handleExpressPayment = async (data: { name?: string; email?: string; paymentMethod?: string }) => {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Update payment intent with express checkout details
+      const response = await fetch('/.netlify/functions/create-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: total,
+          items: [
+            defaultService,
+            ...(includeCprSign ? [{
+              id: "cpr-sign",
+              name: "CPR Sign",
+              price: cprSignPrice,
+              description: "CPR Sign for pool safety"
+            }] : [])
+          ],
+          includeCprSign,
+          customerDetails: {
+            firstName: data.name?.split(' ')[0] || '',
+            lastName: data.name?.split(' ').slice(1).join(' ') || '',
+            email: data.email || '',
+            paymentMethod: data.paymentMethod,
+          },
+          paymentIntentId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update payment intent');
+      }
+
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      setError(error.message || 'Error processing your payment. Please try again.');
+      throw error;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     setError(null);
@@ -178,7 +228,6 @@ export default function CheckoutClient() {
           </div>
 
           <div className="space-y-8">
-
             {/* Main Content */}
             <div className="space-y-8">
               {/* CPR Sign Alert */}
@@ -402,10 +451,11 @@ export default function CheckoutClient() {
                   <div className="border-t pt-6">
                     <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
                     {clientSecret && (
-                    <PaymentForm
-                      clientSecret={clientSecret}
-                      amount={total}
-                    />
+                      <PaymentForm
+                        clientSecret={clientSecret}
+                        amount={total}
+                        onSubmit={handleExpressPayment}
+                      />
                     )}
                   </div>
 
