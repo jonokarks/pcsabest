@@ -41,15 +41,17 @@ interface PaymentFormProps {
   }) => Promise<void>;
 }
 
-function PaymentFormContent({ amount, onSubmit }: { 
+function PaymentFormContent({ amount, onSubmit, clientSecret }: { 
   amount: number;
   onSubmit: PaymentFormProps['onSubmit'];
+  clientSecret: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
   const [paymentRequest, setPaymentRequest] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -90,17 +92,38 @@ function PaymentFormContent({ amount, onSubmit }: {
     // Handle payment request button events
     pr.on('paymentmethod', async (event) => {
       try {
-        // Pass payer details to parent component
+        setError(null);
+
+        // First update customer details
         await onSubmit({
           name: event.payerName || '',
           email: event.payerEmail || '',
           paymentMethod: event.paymentMethod.type,
         });
 
-        // Complete the payment
+        // Then confirm the payment
+        const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+          clientSecret,
+          {
+            payment_method: event.paymentMethod.id,
+          }
+        );
+
+        if (confirmError) {
+          throw new Error(confirmError.message);
+        }
+
+        // Complete the payment request
         event.complete('success');
+
+        if (paymentIntent.status === 'succeeded') {
+          router.push("/checkout/success");
+        } else {
+          throw new Error('Payment failed');
+        }
       } catch (error: any) {
         console.error('Express payment error:', error);
+        setError(error.message || 'Payment failed. Please try again.');
         event.complete('fail');
       }
     });
@@ -115,16 +138,17 @@ function PaymentFormContent({ amount, onSubmit }: {
     return () => {
       window.confirmStripePayment = undefined;
     };
-  }, [stripe, elements, amount, onSubmit, router]);
+  }, [stripe, elements, amount, onSubmit, router, clientSecret]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
+          {/* Stripe Badge */}
           <img
-            src="https://b.stripecdn.com/site-srv/assets/img/v3/home/powered_by_stripe-f3c0a8c0e4da1c07adb12502a6f6e6ab.png"
+            src="https://stripe.com/img/documentation/checkout/marketplace.png"
             alt="Powered by Stripe"
-            className="h-8"
+            className="h-8 w-auto"
           />
           <div className="flex items-center">
             <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,20 +158,21 @@ function PaymentFormContent({ amount, onSubmit }: {
           </div>
         </div>
         <div className="flex items-center space-x-2">
+          {/* Payment Method Icons */}
           <img
-            src="https://js.stripe.com/v3/fingerprinted/img/visa-729c05c240c4bdb47b03ac81d9945bfe.svg"
+            src="https://js.stripe.com/v3/fingerprinted/img/visa-365725566f9578a9589553aa9296d178.svg"
             alt="Visa"
-            className="h-6"
+            className="h-6 w-auto"
           />
           <img
             src="https://js.stripe.com/v3/fingerprinted/img/mastercard-4d8844094130711885b5e41b28c9848f.svg"
             alt="Mastercard"
-            className="h-6"
+            className="h-6 w-auto"
           />
           <img
             src="https://js.stripe.com/v3/fingerprinted/img/amex-a49b82f46c5cd6a96a6e418a6ca1717c.svg"
             alt="American Express"
-            className="h-6"
+            className="h-6 w-auto"
           />
         </div>
       </div>
@@ -168,6 +193,21 @@ function PaymentFormContent({ amount, onSubmit }: {
           />
           <div className="mt-4 text-center text-sm text-gray-500">
             Or pay with card below
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-lg">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm">{error}</p>
+            </div>
           </div>
         </div>
       )}
@@ -247,7 +287,7 @@ export default function PaymentForm({ clientSecret, amount, onSubmit }: PaymentF
 
   return (
     <StripeElements stripe={stripePromise} options={options}>
-      <PaymentFormContent amount={amount} onSubmit={onSubmit} />
+      <PaymentFormContent amount={amount} onSubmit={onSubmit} clientSecret={clientSecret} />
     </StripeElements>
   );
 }

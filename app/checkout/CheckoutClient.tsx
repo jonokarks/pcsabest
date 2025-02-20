@@ -37,11 +37,11 @@ export default function CheckoutClient() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isValid },
     getValues,
-    trigger,
   } = useForm<FormData>({
-    mode: 'onChange',
+    mode: 'all',
+    reValidateMode: 'onChange',
   });
 
   const basePrice = defaultService.price;
@@ -50,15 +50,14 @@ export default function CheckoutClient() {
 
   // Update form validity whenever form state changes
   useEffect(() => {
-    const checkFormValidity = async () => {
-      const isFormValid = await trigger();
-      setFormValid(isFormValid);
-      if (isFormValid) {
-        setFormData(getValues());
-      }
-    };
-    checkFormValidity();
-  }, [trigger, getValues, errors]);
+    if (isValid) {
+      setFormValid(true);
+      setFormData(getValues());
+    } else {
+      setFormValid(false);
+      setFormData(null);
+    }
+  }, [isValid, getValues]);
 
   useEffect(() => {
     let mounted = true;
