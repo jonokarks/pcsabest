@@ -140,18 +140,15 @@ export default function CheckoutClient() {
         ...(includeCprSign ? [cprSignService] : [])
       ];
 
-      const basePrice = defaultService.price;
-      const cprSignPrice = includeCprSign ? cprSignService.price : 0;
-      const expressTotal = basePrice + cprSignPrice;
-
       // Create a new payment intent for express checkout
+      // Use the same total calculation as the main form
       const response = await fetch('/.netlify/functions/create-payment-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: expressTotal,
+          amount: total, // Use the same total from state
           items,
           includeCprSign,
           customerDetails: {

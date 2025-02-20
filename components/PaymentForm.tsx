@@ -64,6 +64,23 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     []
   );
 
+  // Create payment request instance
+  const createPaymentRequest = useCallback(() => {
+    if (!stripe) return null;
+    return stripe.paymentRequest({
+      country: 'AU',
+      currency: 'aud',
+      total: {
+        label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+        amount: amount * 100,
+      },
+      requestShipping: false,
+      requestPayerName: true,
+      requestPayerEmail: true,
+      disableWallets: ['link'],
+    });
+  }, [stripe, amount]);
+
   // Initialize payment request
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -71,25 +88,13 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
     const initializePaymentRequest = async () => {
       try {
-        // Clear existing payment request
-        if (prRef.current) {
-          setPaymentRequest(null);
-          updatePaymentRequestVisibility(false);
-          prRef.current = null;
-        }
+        // Always create a new payment request instance
+        setPaymentRequest(null);
+        updatePaymentRequestVisibility(false);
+        prRef.current = null;
 
-        const pr = stripe.paymentRequest({
-          country: 'AU',
-          currency: 'aud',
-          total: {
-            label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-            amount: amount * 100,
-          },
-          requestShipping: false,
-          requestPayerName: true,
-          requestPayerEmail: true,
-          disableWallets: ['link'],
-        });
+        const pr = createPaymentRequest();
+        if (!pr) return;
 
         const result = await pr.canMakePayment();
         if (mounted && result) {
@@ -101,15 +106,6 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
           pr.on('paymentmethod', async (event: any) => {
             try {
               setError(null);
-
-              // Update the payment request amount before proceeding
-              await pr.update({
-                total: {
-                  label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-                  amount: amount * 100,
-                },
-              });
-
               const { clientSecret: newClientSecret } = await onSubmit({
                 name: event.payerName || '',
                 email: event.payerEmail || '',
