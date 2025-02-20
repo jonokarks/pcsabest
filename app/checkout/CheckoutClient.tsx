@@ -177,8 +177,34 @@ export default function CheckoutClient() {
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-8 space-y-8">
+          <div className="space-y-8">
+            {/* Express Payment Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Express Checkout</h2>
+                <div className="flex items-center space-x-3">
+                  <button className="bg-black text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-800 transition-colors flex items-center">
+                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.112 0H6.888C3.088 0 0 3.088 0 6.888v10.224C0 20.912 3.088 24 6.888 24h10.224C20.912 24 24 20.912 24 17.112V6.888C24 3.088 20.912 0 17.112 0zM12 18.24c-3.456 0-6.24-2.784-6.24-6.24S8.544 5.76 12 5.76s6.24 2.784 6.24 6.24-2.784 6.24-6.24 6.24z"/>
+                    </svg>
+                    Pay with Apple Pay
+                  </button>
+                  <button className="bg-white border-2 border-gray-300 px-6 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center">
+                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12z"/>
+                      <path fill="white" d="M12.293 7.293a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L13 9.414V16a1 1 0 11-2 0V9.414L8.707 11.707a1 1 0 01-1.414-1.414l3-3z"/>
+                    </svg>
+                    Pay with Google Pay
+                  </button>
+                </div>
+              </div>
+              <div className="border-t pt-4 text-center text-sm text-gray-500">
+                Or continue with card payment below
+              </div>
+            </div>
+
+            {/* Main Content */}
+            <div className="space-y-8">
               {/* CPR Sign Alert */}
               <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
                 <div className="flex">
@@ -196,192 +222,7 @@ export default function CheckoutClient() {
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-lg shadow-lg p-6 space-y-6">
-                <div className="border-b pb-4">
-                  <h2 className="text-xl font-semibold">Contact Information</h2>
-                  <p className="text-gray-500 text-sm mt-1">We'll use these details to contact you about your inspection</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                    <input
-                      {...register("firstName", { required: "First name is required" })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.firstName ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.firstName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                    <input
-                      {...register("lastName", { required: "Last name is required" })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.lastName ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.lastName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    {...register("email", {
-                      required: "Email is required",
-                      pattern: {
-                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                        message: "Invalid email address",
-                      },
-                    })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                      errors.email ? 'border-red-500' : ''
-                    }`}
-                  />
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    {...register("phone", {
-                      required: "Phone number is required",
-                      pattern: {
-                        value: /^(?:\+?61|0)[2-478](?:[ -]?[0-9]){8}$/,
-                        message: "Invalid Australian phone number",
-                      },
-                    })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                      errors.phone ? 'border-red-500' : ''
-                    }`}
-                  />
-                  {errors.phone && (
-                    <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                  <input
-                    {...register("address", { required: "Address is required" })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                      errors.address ? 'border-red-500' : ''
-                    }`}
-                  />
-                  {errors.address && (
-                    <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Suburb</label>
-                    <input
-                      {...register("suburb", { required: "Suburb is required" })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.suburb ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.suburb && (
-                      <p className="mt-1 text-sm text-red-600">{errors.suburb.message}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
-                    <input
-                      {...register("postcode", {
-                        required: "Postcode is required",
-                        pattern: {
-                          value: /^[0-9]{4}$/,
-                          message: "Invalid postcode",
-                        },
-                      })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.postcode ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.postcode && (
-                      <p className="mt-1 text-sm text-red-600">{errors.postcode.message}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
-                  <input
-                    type="date"
-                    {...register("preferredDate", { required: "Preferred date is required" })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                      errors.preferredDate ? 'border-red-500' : ''
-                    }`}
-                  />
-                  {errors.preferredDate && (
-                    <p className="mt-1 text-sm text-red-600">{errors.preferredDate.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
-                  <textarea
-                    {...register("notes")}
-                    rows={4}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
-
-                <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="cprSign"
-                    checked={includeCprSign}
-                    onChange={(e) => setIncludeCprSign(e.target.checked)}
-                    className="h-5 w-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="cprSign" className="ml-3">
-                    <div className="text-sm font-medium text-gray-900">Add CPR Sign (+$30)</div>
-                    <p className="text-sm text-gray-500">Required by law for all pool owners</p>
-                  </label>
-                </div>
-
-                {error && (
-                  <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-lg">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm">{error}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="mt-6">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`w-full bg-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-700 transition duration-300 ${
-                      isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {isSubmitting ? 'Processing...' : `Pay $${total}`}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <div className="lg:col-span-4 space-y-6">
+              {/* Order Summary Card */}
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
                 <div className="space-y-4">
@@ -423,13 +264,201 @@ export default function CheckoutClient() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
-                {clientSecret && (
-                  <PaymentForm
-                    clientSecret={clientSecret}
-                  />
-                )}
+              {/* Contact Form and Payment Section */}
+              <div className="bg-white rounded-lg shadow-lg p-6 space-y-8">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                  <div className="border-b pb-4">
+                    <h2 className="text-xl font-semibold">Contact Information</h2>
+                    <p className="text-gray-500 text-sm mt-1">We'll use these details to contact you about your inspection</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                      <input
+                        {...register("firstName", { required: "First name is required" })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.firstName ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.firstName && (
+                        <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                      <input
+                        {...register("lastName", { required: "Last name is required" })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.lastName ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.lastName && (
+                        <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      {...register("email", {
+                        required: "Email is required",
+                        pattern: {
+                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                          message: "Invalid email address",
+                        },
+                      })}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                        errors.email ? 'border-red-500' : ''
+                      }`}
+                    />
+                    {errors.email && (
+                      <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      {...register("phone", {
+                        required: "Phone number is required",
+                        pattern: {
+                          value: /^(?:\+?61|0)[2-478](?:[ -]?[0-9]){8}$/,
+                          message: "Invalid Australian phone number",
+                        },
+                      })}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                        errors.phone ? 'border-red-500' : ''
+                      }`}
+                    />
+                    {errors.phone && (
+                      <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                    <input
+                      {...register("address", { required: "Address is required" })}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                        errors.address ? 'border-red-500' : ''
+                      }`}
+                    />
+                    {errors.address && (
+                      <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Suburb</label>
+                      <input
+                        {...register("suburb", { required: "Suburb is required" })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.suburb ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.suburb && (
+                        <p className="mt-1 text-sm text-red-600">{errors.suburb.message}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
+                      <input
+                        {...register("postcode", {
+                          required: "Postcode is required",
+                          pattern: {
+                            value: /^[0-9]{4}$/,
+                            message: "Invalid postcode",
+                          },
+                        })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.postcode ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.postcode && (
+                        <p className="mt-1 text-sm text-red-600">{errors.postcode.message}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
+                    <input
+                      type="date"
+                      {...register("preferredDate", { required: "Preferred date is required" })}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                        errors.preferredDate ? 'border-red-500' : ''
+                      }`}
+                    />
+                    {errors.preferredDate && (
+                      <p className="mt-1 text-sm text-red-600">{errors.preferredDate.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
+                    <textarea
+                      {...register("notes")}
+                      rows={4}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center p-4 bg-gray-50 rounded-lg">
+                    <input
+                      type="checkbox"
+                      id="cprSign"
+                      checked={includeCprSign}
+                      onChange={(e) => setIncludeCprSign(e.target.checked)}
+                      className="h-5 w-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="cprSign" className="ml-3">
+                      <div className="text-sm font-medium text-gray-900">Add CPR Sign (+$30)</div>
+                      <p className="text-sm text-gray-500">Required by law for all pool owners</p>
+                    </label>
+                  </div>
+
+                  {/* Payment Section */}
+                  <div className="border-t pt-6">
+                    <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
+                    {clientSecret && (
+                      <PaymentForm
+                        clientSecret={clientSecret}
+                      />
+                    )}
+                  </div>
+
+                  {error && (
+                    <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-lg">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm">{error}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-6">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className={`w-full bg-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-700 transition duration-300 ${
+                        isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {isSubmitting ? 'Processing...' : `Pay $${total}`}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>
