@@ -119,19 +119,14 @@ export default function CheckoutClient() {
       ...(includeCprSign ? [cprSignService] : [])
     ];
 
-    // Reset payment intent when amount changes
-    if (paymentIntentId) {
-      setPaymentIntentId(''); // Force creation of new payment intent
-    }
-
     updatePaymentIntent(
       total,
       items,
       includeCprSign,
       formData,
-      null // Always create new payment intent when amount changes
+      paymentIntentId // Keep existing payment intent ID
     );
-  }, [total, includeCprSign, formData, formValid, updatePaymentIntent]);
+  }, [total, includeCprSign, formData, formValid, paymentIntentId, updatePaymentIntent]);
 
   const handleExpressPayment = async (data: { name?: string; email?: string; paymentMethod?: string }) => {
     if (!formValid || !formData) {
