@@ -64,71 +64,74 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     []
   );
 
-  // Create payment request when amount changes
+  // Initialize payment request
   useEffect(() => {
     if (!stripe || !elements) return;
     let mounted = true;
 
-    const createPaymentRequest = async () => {
+    const initializePaymentRequest = async () => {
+      // Clear existing payment request
+      if (prRef.current) {
+        setPaymentRequest(null);
+        updatePaymentRequestVisibility(false);
+        prRef.current = null;
+      }
+
       const pr = stripe.paymentRequest({
         country: 'AU',
         currency: 'aud',
         total: {
           label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-          amount: amount * 100, // Convert to cents
+          amount: amount * 100,
         },
         requestShipping: false,
         requestPayerName: true,
         requestPayerEmail: true,
-        disableWallets: ['link'], // Only show Apple Pay/Google Pay
+        disableWallets: ['link'],
       });
 
-      // Check if the Payment Request is available
       const result = await pr.canMakePayment();
       if (mounted && result) {
         prRef.current = pr;
         setPaymentRequest(pr);
         updatePaymentRequestVisibility(true);
-      }
 
-      // Handle payment request button events
-      pr.on('paymentmethod', async (event) => {
-        try {
-          setError(null);
+        // Handle payment request button events
+        pr.on('paymentmethod', async (event: any) => {
+          try {
+            setError(null);
 
-          // First update customer details and get new client secret
-          const { clientSecret: newClientSecret } = await onSubmit({
-            name: event.payerName || '',
-            email: event.payerEmail || '',
-            paymentMethod: event.paymentMethod.type,
-          });
+            const { clientSecret: newClientSecret } = await onSubmit({
+              name: event.payerName || '',
+              email: event.payerEmail || '',
+              paymentMethod: event.paymentMethod.type,
+            });
 
-          // For Apple Pay / Google Pay, use confirmCardPayment
-          const { error: confirmError } = await stripe.confirmCardPayment(
-            newClientSecret || clientSecret,
-            {
-              payment_method: event.paymentMethod.id,
-              receipt_email: event.payerEmail,
+            const { error: confirmError } = await stripe.confirmCardPayment(
+              newClientSecret || clientSecret,
+              {
+                payment_method: event.paymentMethod.id,
+                receipt_email: event.payerEmail,
+              }
+            );
+
+            if (confirmError) {
+              event.complete('fail');
+              throw new Error(confirmError.message);
             }
-          );
 
-          if (confirmError) {
+            event.complete('success');
+            router.push("/checkout/success");
+          } catch (error: any) {
+            console.error('Express payment error:', error);
+            setError(error.message || 'Payment failed. Please try again.');
             event.complete('fail');
-            throw new Error(confirmError.message);
           }
-
-          // Complete the payment request
-          event.complete('success');
-          router.push("/checkout/success");
-        } catch (error: any) {
-          console.error('Express payment error:', error);
-          setError(error.message || 'Payment failed. Please try again.');
-          event.complete('fail');
-        }
-      });
+        });
+      }
     };
 
-    createPaymentRequest();
+    initializePaymentRequest();
 
     return () => {
       mounted = false;
@@ -136,13 +139,13 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     };
   }, [stripe, elements, amount, onSubmit, router, clientSecret, updatePaymentRequestVisibility]);
 
-  // Update payment request amount when total changes
+  // Update payment request amount when it changes
   useEffect(() => {
     if (prRef.current) {
       prRef.current.update({
         total: {
           label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-          amount: amount * 100, // Convert to cents
+          amount: amount * 100,
         },
       });
     }
