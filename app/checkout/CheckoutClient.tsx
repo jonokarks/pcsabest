@@ -178,30 +178,6 @@ export default function CheckoutClient() {
           </div>
 
           <div className="space-y-8">
-            {/* Express Payment Section */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold">Express Checkout</h2>
-                <div className="flex items-center space-x-3">
-                  <button className="bg-black text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-800 transition-colors flex items-center">
-                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M17.112 0H6.888C3.088 0 0 3.088 0 6.888v10.224C0 20.912 3.088 24 6.888 24h10.224C20.912 24 24 20.912 24 17.112V6.888C24 3.088 20.912 0 17.112 0zM12 18.24c-3.456 0-6.24-2.784-6.24-6.24S8.544 5.76 12 5.76s6.24 2.784 6.24 6.24-2.784 6.24-6.24 6.24z"/>
-                    </svg>
-                    Pay with Apple Pay
-                  </button>
-                  <button className="bg-white border-2 border-gray-300 px-6 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center">
-                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 24c6.627 0 12-5.373 12-12S18.627 0 12 0 0 5.373 0 12s5.373 12 12 12z"/>
-                      <path fill="white" d="M12.293 7.293a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L13 9.414V16a1 1 0 11-2 0V9.414L8.707 11.707a1 1 0 01-1.414-1.414l3-3z"/>
-                    </svg>
-                    Pay with Google Pay
-                  </button>
-                </div>
-              </div>
-              <div className="border-t pt-4 text-center text-sm text-gray-500">
-                Or continue with card payment below
-              </div>
-            </div>
 
             {/* Main Content */}
             <div className="space-y-8">
@@ -426,9 +402,10 @@ export default function CheckoutClient() {
                   <div className="border-t pt-6">
                     <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
                     {clientSecret && (
-                      <PaymentForm
-                        clientSecret={clientSecret}
-                      />
+                    <PaymentForm
+                      clientSecret={clientSecret}
+                      amount={total}
+                    />
                     )}
                   </div>
 

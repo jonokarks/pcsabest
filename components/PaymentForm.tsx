@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   PaymentElement,
   useStripe,
   useElements,
   Elements as StripeElements,
+  PaymentRequestButtonElement,
 } from "@stripe/react-stripe-js";
 import type { Appearance } from '@stripe/stripe-js';
 
@@ -34,12 +34,14 @@ declare global {
 
 interface PaymentFormProps {
   clientSecret: string;
+  amount: number;
 }
 
-function PaymentFormContent() {
+function PaymentFormContent({ amount }: { amount: number }) {
   const stripe = useStripe();
   const elements = useElements();
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
+  const [paymentRequest, setPaymentRequest] = useState(null);
 
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -66,16 +68,39 @@ function PaymentFormContent() {
       };
     };
 
+    const pr = stripe.paymentRequest({
+      country: 'AU',
+      currency: 'aud',
+      total: {
+        label: 'Pool Safety Inspection',
+        amount: amount * 100, // Convert to cents
+      },
+      requestPayerName: true,
+      requestPayerEmail: true,
+    });
+
+    // Check if the Payment Request is available
+    pr.canMakePayment().then(result => {
+      if (result) {
+        setPaymentRequest(pr as any);
+      }
+    });
+
     return () => {
       window.confirmStripePayment = undefined;
     };
-  }, [stripe, elements]);
+  }, [stripe, elements, amount]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          <Image src="/images/stripe-badge.png" alt="Powered by Stripe" width={100} height={30} />
+          {/* Stripe Badge */}
+          <img
+            src="https://b.stripecdn.com/site-srv/assets/img/v3/home/powered_by_stripe-f3c0a8c0e4da1c07adb12502a6f6e6ab.png"
+            alt="Powered by Stripe"
+            className="h-8"
+          />
           <div className="flex items-center">
             <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15l-4-4h8l-4 4z" />
@@ -84,11 +109,44 @@ function PaymentFormContent() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Image src="/images/visa.svg" alt="Visa" width={32} height={20} />
-          <Image src="/images/mastercard.svg" alt="Mastercard" width={32} height={20} />
-          <Image src="/images/amex.svg" alt="American Express" width={32} height={20} />
+          {/* Payment Method Icons */}
+          <img
+            src="https://js.stripe.com/v3/fingerprinted/img/visa-729c05c240c4bdb47b03ac81d9945bfe.svg"
+            alt="Visa"
+            className="h-6"
+          />
+          <img
+            src="https://js.stripe.com/v3/fingerprinted/img/mastercard-4d8844094130711885b5e41b28c9848f.svg"
+            alt="Mastercard"
+            className="h-6"
+          />
+          <img
+            src="https://js.stripe.com/v3/fingerprinted/img/amex-a49b82f46c5cd6a96a6e418a6ca1717c.svg"
+            alt="American Express"
+            className="h-6"
+          />
         </div>
       </div>
+
+      {paymentRequest && (
+        <div className="mb-4">
+          <PaymentRequestButtonElement
+            options={{
+              paymentRequest,
+              style: {
+                paymentRequestButton: {
+                  type: 'default',
+                  theme: 'dark',
+                  height: '44px',
+                },
+              },
+            }}
+          />
+          <div className="mt-4 text-center text-sm text-gray-500">
+            Or pay with card below
+          </div>
+        </div>
+      )}
 
       <div className="bg-blue-50 p-4 rounded-lg mb-6">
         <div className="flex items-start">
@@ -108,7 +166,6 @@ function PaymentFormContent() {
       <div className="mb-6">
         <PaymentElement 
           options={{
-            paymentMethodOrder: ['apple_pay', 'google_pay', 'card'],
             defaultValues: {
               billingDetails: {
                 name: '',
@@ -135,7 +192,7 @@ function PaymentFormContent() {
   );
 }
 
-export default function PaymentForm({ clientSecret }: PaymentFormProps) {
+export default function PaymentForm({ clientSecret, amount }: PaymentFormProps) {
   const appearance: Appearance = {
     theme: 'stripe' as const,
     variables: {
@@ -166,7 +223,7 @@ export default function PaymentForm({ clientSecret }: PaymentFormProps) {
 
   return (
     <StripeElements stripe={stripePromise} options={options}>
-      <PaymentFormContent />
+      <PaymentFormContent amount={amount} />
     </StripeElements>
   );
 }
