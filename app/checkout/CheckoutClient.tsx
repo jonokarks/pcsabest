@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { motion, AnimatePresence } from "framer-motion";
 import PaymentForm from "../../components/PaymentForm";
+import DateTimePicker from "../../components/DateTimePicker";
 
 const SERVICES = {
   poolInspection: {
@@ -27,7 +29,7 @@ interface FormData {
   address: string;
   suburb: string;
   postcode: string;
-  preferredDate: string;
+  preferredDate: Date | null;
   notes: string;
 }
 
@@ -44,6 +46,7 @@ export default function CheckoutClient() {
     register,
     formState: { errors, isValid },
     watch,
+    setValue,
   } = useForm<FormData>({
     mode: 'onChange',
   });
@@ -159,7 +162,11 @@ export default function CheckoutClient() {
 
           <div className="space-y-8">
             {/* CPR Sign Alert */}
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg"
+            >
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
@@ -173,22 +180,34 @@ export default function CheckoutClient() {
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Order Summary */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-white rounded-lg shadow-lg p-6"
+            >
               <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
               <div className="space-y-4">
                 <div className="flex justify-between">
                   <span>{SERVICES.poolInspection.name}</span>
                   <span>${SERVICES.poolInspection.price}</span>
                 </div>
-                {includeCprSign && (
-                  <div className="flex justify-between text-teal-600">
-                    <span>{SERVICES.cprSign.name}</span>
-                    <span>${SERVICES.cprSign.price}</span>
-                  </div>
-                )}
+                <AnimatePresence>
+                  {includeCprSign && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="flex justify-between text-teal-600"
+                    >
+                      <span>{SERVICES.cprSign.name}</span>
+                      <span>${SERVICES.cprSign.price}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 <div className="border-t pt-4 flex justify-between font-semibold">
                   <span>Total</span>
                   <span>${total}</span>
@@ -215,339 +234,392 @@ export default function CheckoutClient() {
                   <span className="text-sm">Secure Payment</span>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Contact Form */}
-            {!showPayment && (
-              <div className="bg-white rounded-lg shadow-lg p-6 space-y-8">
-                <form className="space-y-6">
-                  <div className="border-b pb-4">
-                    <h2 className="text-xl font-semibold">Contact Information</h2>
-                    <p className="text-gray-500 text-sm mt-1">We'll use these details to contact you about your inspection</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                      <input
-                        {...register("firstName", { required: "First name is required" })}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                          errors.firstName ? 'border-red-500' : ''
-                        }`}
-                      />
-                      {errors.firstName && (
-                        <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
-                      )}
+            <AnimatePresence mode="wait">
+              {!showPayment ? (
+                <motion.div
+                  key="contact-form"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-white rounded-lg shadow-lg p-6 space-y-8"
+                >
+                  <form className="space-y-6">
+                    <div className="border-b pb-4">
+                      <h2 className="text-xl font-semibold">Contact Information</h2>
+                      <p className="text-gray-500 text-sm mt-1">We'll use these details to contact you about your inspection</p>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                      <input
-                        {...register("lastName", { required: "Last name is required" })}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                          errors.lastName ? 'border-red-500' : ''
-                        }`}
-                      />
-                      {errors.lastName && (
-                        <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
-                      )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                        <input
+                          {...register("firstName", { required: "First name is required" })}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                            errors.firstName ? 'border-red-500' : ''
+                          }`}
+                        />
+                        {errors.firstName && (
+                          <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                        <input
+                          {...register("lastName", { required: "Last name is required" })}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                            errors.lastName ? 'border-red-500' : ''
+                          }`}
+                        />
+                        {errors.lastName && (
+                          <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input
-                      type="email"
-                      {...register("email", {
-                        required: "Email is required",
-                        pattern: {
-                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: "Invalid email address",
-                        },
-                      })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.email ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.email && (
-                      <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                    <input
-                      type="tel"
-                      {...register("phone", {
-                        required: "Phone number is required",
-                        pattern: {
-                          value: /^(?:\+?61|0)[2-478](?:[ -]?[0-9]){8}$/,
-                          message: "Invalid Australian phone number",
-                        },
-                      })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.phone ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.phone && (
-                      <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                    <input
-                      {...register("address", { required: "Address is required" })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.address ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.address && (
-                      <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Suburb</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                       <input
-                        {...register("suburb", { required: "Suburb is required" })}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                          errors.suburb ? 'border-red-500' : ''
-                        }`}
-                      />
-                      {errors.suburb && (
-                        <p className="mt-1 text-sm text-red-600">{errors.suburb.message}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
-                      <input
-                        {...register("postcode", {
-                          required: "Postcode is required",
+                        type="email"
+                        {...register("email", {
+                          required: "Email is required",
                           pattern: {
-                            value: /^[0-9]{4}$/,
-                            message: "Invalid postcode",
+                            value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                            message: "Invalid email address",
                           },
                         })}
                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                          errors.postcode ? 'border-red-500' : ''
+                          errors.email ? 'border-red-500' : ''
                         }`}
                       />
-                      {errors.postcode && (
-                        <p className="mt-1 text-sm text-red-600">{errors.postcode.message}</p>
+                      {errors.email && (
+                        <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
                       )}
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
-                    <input
-                      type="date"
-                      {...register("preferredDate", { required: "Preferred date is required" })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.preferredDate ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.preferredDate && (
-                      <p className="mt-1 text-sm text-red-600">{errors.preferredDate.message}</p>
-                    )}
-                  </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                      <input
+                        type="tel"
+                        {...register("phone", {
+                          required: "Phone number is required",
+                          pattern: {
+                            value: /^(?:\+?61|0)[2-478](?:[ -]?[0-9]){8}$/,
+                            message: "Invalid Australian phone number",
+                          },
+                        })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.phone ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.phone && (
+                        <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
+                      )}
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
-                    <textarea
-                      {...register("notes")}
-                      rows={4}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                      <input
+                        {...register("address", { required: "Address is required" })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.address ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.address && (
+                        <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
+                      )}
+                    </div>
 
-                  <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-                    <input
-                      type="checkbox"
-                      id="cprSign"
-                      checked={includeCprSign}
-                      onChange={(e) => handleCprSignChange(e.target.checked)}
-                      className="h-5 w-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="cprSign" className="ml-3">
-                      <div className="text-sm font-medium text-gray-900">Add CPR Sign (+$30)</div>
-                      <p className="text-sm text-gray-500">Required by law for all pool owners</p>
-                    </label>
-                  </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Suburb</label>
+                        <input
+                          {...register("suburb", { required: "Suburb is required" })}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                            errors.suburb ? 'border-red-500' : ''
+                          }`}
+                        />
+                        {errors.suburb && (
+                          <p className="mt-1 text-sm text-red-600">{errors.suburb.message}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
+                        <input
+                          {...register("postcode", {
+                            required: "Postcode is required",
+                            pattern: {
+                              value: /^[0-9]{4}$/,
+                              message: "Invalid postcode",
+                            },
+                          })}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                            errors.postcode ? 'border-red-500' : ''
+                          }`}
+                        />
+                        {errors.postcode && (
+                          <p className="mt-1 text-sm text-red-600">{errors.postcode.message}</p>
+                        )}
+                      </div>
+                    </div>
 
-                  {/* Review Order Button */}
-                  {isValid && (
-                    <button
-                      type="button"
-                      onClick={() => setIsModalOpen(true)}
-                      disabled={isLoading || !isValid}
-                      className={`w-full bg-teal-600 text-white py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
-                        (isLoading || !isValid) ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date & Time</label>
+                      <DateTimePicker
+                        selectedDate={watch("preferredDate")}
+                        onChange={(date) => {
+                          setValue("preferredDate", date, { shouldValidate: true });
+                        }}
+                        minDate={new Date()}
+                        maxDate={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}
+                        className={errors.preferredDate ? 'border-red-500' : ''}
+                      />
+                      {errors.preferredDate && (
+                        <p className="mt-1 text-sm text-red-600">{errors.preferredDate.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
+                      <textarea
+                        {...register("notes")}
+                        rows={4}
+                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      />
+                    </div>
+
+                    <motion.div
+                      whileHover={{ scale: 1.01 }}
+                      className="flex items-center p-4 bg-gray-50 rounded-lg"
                     >
-                      {isLoading ? 'Loading...' : 'Proceed to Payment'}
-                    </button>
-                  )}
+                      <input
+                        type="checkbox"
+                        id="cprSign"
+                        checked={includeCprSign}
+                        onChange={(e) => handleCprSignChange(e.target.checked)}
+                        className="h-5 w-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="cprSign" className="ml-3">
+                        <div className="text-sm font-medium text-gray-900">Add CPR Sign (+$30)</div>
+                        <p className="text-sm text-gray-500">Required by law for all pool owners</p>
+                      </label>
+                    </motion.div>
 
-                  {/* Order Review Modal */}
-                  {isModalOpen && (
-                    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-                      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 space-y-6">
-                          <div className="flex justify-between items-center border-b pb-4">
-                            <h3 className="text-xl font-semibold">Review Your Order</h3>
-                            <button
-                              onClick={() => setIsModalOpen(false)}
-                              className="text-gray-400 hover:text-gray-500"
-                            >
-                              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
+                    {/* Review Order Button */}
+                    {isValid && (
+                      <motion.button
+                        type="button"
+                        onClick={() => setIsModalOpen(true)}
+                        disabled={isLoading || !isValid}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        className={`w-full bg-teal-600 text-white py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
+                          (isLoading || !isValid) ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        {isLoading ? 'Loading...' : 'Proceed to Payment'}
+                      </motion.button>
+                    )}
 
-                          {/* Customer Details */}
-                          <div className="bg-gray-50 p-4 rounded-lg">
-                            <h4 className="font-medium mb-3">Customer Details</h4>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <p className="text-gray-600">Name</p>
-                                <p className="font-medium">{formData.firstName} {formData.lastName}</p>
+                    {/* Order Review Modal */}
+                    <AnimatePresence>
+                      {isModalOpen && (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+                        >
+                          <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+                          >
+                            <div className="p-6 space-y-6">
+                              <div className="flex justify-between items-center border-b pb-4">
+                                <h3 className="text-xl font-semibold">Review Your Order</h3>
+                                <button
+                                  onClick={() => setIsModalOpen(false)}
+                                  className="text-gray-400 hover:text-gray-500"
+                                >
+                                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
                               </div>
-                              <div>
-                                <p className="text-gray-600">Email</p>
-                                <p className="font-medium">{formData.email}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-600">Phone</p>
-                                <p className="font-medium">{formData.phone}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-600">Preferred Date</p>
-                                <p className="font-medium">{formData.preferredDate}</p>
-                              </div>
-                              <div className="col-span-2">
-                                <p className="text-gray-600">Address</p>
-                                <p className="font-medium">
-                                  {formData.address}, {formData.suburb} {formData.postcode}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
 
-                          {/* Order Summary */}
-                          <div>
-                            <h4 className="font-medium mb-3">Order Summary</h4>
-                            <div className="space-y-3">
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <p className="font-medium">{SERVICES.poolInspection.name}</p>
-                                  <p className="text-sm text-gray-600">{SERVICES.poolInspection.description}</p>
-                                </div>
-                                <span className="font-medium">${SERVICES.poolInspection.price}</span>
-                              </div>
-                              {includeCprSign && (
-                                <div className="flex justify-between items-center text-teal-600">
+                              {/* Customer Details */}
+                              <div className="bg-gray-50 p-4 rounded-lg">
+                                <h4 className="font-medium mb-3">Customer Details</h4>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
                                   <div>
-                                    <p className="font-medium">{SERVICES.cprSign.name}</p>
-                                    <p className="text-sm text-gray-600">{SERVICES.cprSign.description}</p>
+                                    <p className="text-gray-600">Name</p>
+                                    <p className="font-medium">{formData.firstName} {formData.lastName}</p>
                                   </div>
-                                  <span className="font-medium">${SERVICES.cprSign.price}</span>
+                                  <div>
+                                    <p className="text-gray-600">Email</p>
+                                    <p className="font-medium">{formData.email}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-600">Phone</p>
+                                    <p className="font-medium">{formData.phone}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-gray-600">Preferred Date & Time</p>
+                                    <p className="font-medium">
+                                      {formData.preferredDate?.toLocaleString('en-AU', {
+                                        dateStyle: 'full',
+                                        timeStyle: 'short'
+                                      })}
+                                    </p>
+                                  </div>
+                                  <div className="col-span-2">
+                                    <p className="text-gray-600">Address</p>
+                                    <p className="font-medium">
+                                      {formData.address}, {formData.suburb} {formData.postcode}
+                                    </p>
+                                  </div>
                                 </div>
-                              )}
-                              <div className="border-t pt-3 flex justify-between items-center font-semibold text-lg">
-                                <span>Total Amount</span>
-                                <span>${total}</span>
+                              </div>
+
+                              {/* Order Summary */}
+                              <div>
+                                <h4 className="font-medium mb-3">Order Summary</h4>
+                                <div className="space-y-3">
+                                  <div className="flex justify-between items-center">
+                                    <div>
+                                      <p className="font-medium">{SERVICES.poolInspection.name}</p>
+                                      <p className="text-sm text-gray-600">{SERVICES.poolInspection.description}</p>
+                                    </div>
+                                    <span className="font-medium">${SERVICES.poolInspection.price}</span>
+                                  </div>
+                                  {includeCprSign && (
+                                    <div className="flex justify-between items-center text-teal-600">
+                                      <div>
+                                        <p className="font-medium">{SERVICES.cprSign.name}</p>
+                                        <p className="text-sm text-gray-600">{SERVICES.cprSign.description}</p>
+                                      </div>
+                                      <span className="font-medium">${SERVICES.cprSign.price}</span>
+                                    </div>
+                                  )}
+                                  <div className="border-t pt-3 flex justify-between items-center font-semibold text-lg">
+                                    <span>Total Amount</span>
+                                    <span>${total}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex space-x-4 pt-4 border-t">
+                                <motion.button
+                                  type="button"
+                                  onClick={() => setIsModalOpen(false)}
+                                  whileHover={{ scale: 1.01 }}
+                                  whileTap={{ scale: 0.99 }}
+                                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                                >
+                                  Edit Details
+                                </motion.button>
+                                <motion.button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsModalOpen(false);
+                                    handleProceedToPayment();
+                                  }}
+                                  disabled={isLoading}
+                                  whileHover={{ scale: 1.01 }}
+                                  whileTap={{ scale: 0.99 }}
+                                  className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
+                                >
+                                  {isLoading ? 'Processing...' : 'Confirm & Pay'}
+                                </motion.button>
                               </div>
                             </div>
-                          </div>
+                          </motion.div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </form>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="payment-section"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="bg-white rounded-lg shadow-lg p-6 space-y-8"
+                >
+                  <div className="border-b pb-4">
+                    <h2 className="text-xl font-semibold">Payment Details</h2>
+                    <p className="text-gray-500 text-sm mt-1">Complete your booking with a secure payment</p>
+                  </div>
 
-                          <div className="flex space-x-4 pt-4 border-t">
-                            <button
-                              type="button"
-                              onClick={() => setIsModalOpen(false)}
-                              className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                            >
-                              Edit Details
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsModalOpen(false);
-                                handleProceedToPayment();
-                              }}
-                              disabled={isLoading}
-                              className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
-                            >
-                              {isLoading ? 'Processing...' : 'Confirm & Pay'}
-                            </button>
+                  <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-blue-800">Total to be charged</p>
+                        <p className="text-2xl font-bold text-blue-900">${total}</p>
+                      </div>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        type="button"
+                        onClick={() => {
+                          setShowPayment(false);
+                          setIsModalOpen(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      >
+                        Edit Order
+                      </motion.button>
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {error && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-lg"
+                      >
+                        <div className="flex">
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm">{error}</p>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  )}
-                </form>
-              </div>
-            )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-            {/* Payment Section */}
-            {showPayment && (
-              <div className="bg-white rounded-lg shadow-lg p-6 space-y-8">
-                <div className="border-b pb-4">
-                  <h2 className="text-xl font-semibold">Payment Details</h2>
-                  <p className="text-gray-500 text-sm mt-1">Complete your booking with a secure payment</p>
-                </div>
-
-                <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-800">Total to be charged</p>
-                      <p className="text-2xl font-bold text-blue-900">${total}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPayment(false);
-                        setIsModalOpen(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  {clientSecret ? (
+                    <PaymentForm
+                      clientSecret={clientSecret}
+                      amount={total}
+                      onSubmit={handlePaymentSubmission}
+                    />
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="p-4 bg-blue-50 rounded-lg"
                     >
-                      Edit Order
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-lg">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm">{error}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {clientSecret ? (
-                  <PaymentForm
-                    clientSecret={clientSecret}
-                    amount={total}
-                    onSubmit={handlePaymentSubmission}
-                  />
-                ) : (
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-700">
-                      Loading payment options...
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+                      <p className="text-sm text-blue-700">
+                        Loading payment options...
+                      </p>
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>
