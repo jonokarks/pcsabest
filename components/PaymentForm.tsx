@@ -110,14 +110,13 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     return pr;
   }, [stripe, onSubmit, clientSecret, router, setError]);
 
-  // Initialize and update payment request
+  // Initialize payment request
   useEffect(() => {
     if (!stripe || !elements) return;
     let mounted = true;
 
     const initializePaymentRequest = async () => {
       try {
-        // Always create a new payment request to ensure fresh state
         const pr = createPaymentRequest(amount);
         if (!pr) return;
 
@@ -148,7 +147,20 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         prRef.current.off('paymentmethod');
       }
     };
-  }, [stripe, elements, amount, createPaymentRequest]);
+  }, [stripe, elements, createPaymentRequest]); // Initialize only when Stripe is ready
+
+  // Update payment request when amount changes
+  useEffect(() => {
+    if (!prRef.current) return;
+
+    console.log('Updating payment request with new amount:', amount);
+    prRef.current.update({
+      total: {
+        label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+        amount: amount * 100,
+      }
+    });
+  }, [amount]); // Update whenever amount changes
 
   // Cleanup on unmount
   useEffect(() => {

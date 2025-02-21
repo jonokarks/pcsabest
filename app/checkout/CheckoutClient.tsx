@@ -37,6 +37,7 @@ export default function CheckoutClient() {
   const [includeCprSign, setIncludeCprSign] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string>("");
+  const [currentTotal, setCurrentTotal] = useState(defaultService.price);
   const [paymentIntentId, setPaymentIntentId] = useState<string>("");
   const [formValid, setFormValid] = useState(false);
   const [formData, setFormData] = useState<FormData | null>(null);
@@ -51,9 +52,12 @@ export default function CheckoutClient() {
     mode: 'onChange',
   });
 
-  const basePrice = defaultService.price;
-  const cprSignPrice = cprSignService.price;
-  const total = basePrice + (includeCprSign ? cprSignPrice : 0);
+  // Calculate total whenever checkbox changes
+  useEffect(() => {
+    const newTotal = defaultService.price + (includeCprSign ? cprSignService.price : 0);
+    setCurrentTotal(newTotal);
+    console.log('Total updated:', newTotal, includeCprSign ? '(including CPR sign)' : '(base price only)');
+  }, [includeCprSign]);
 
   // Watch all form fields for changes
   useEffect(() => {
@@ -71,7 +75,7 @@ export default function CheckoutClient() {
     return () => subscription.unsubscribe();
   }, [watch, getValues]);
 
-  // Debounced payment intent update
+  // Payment intent update
   const updatePaymentIntent = useCallback(
     async (amount: number, items: any[], includeCprSign: boolean, customerDetails: any | null, paymentIntentId: string | null) => {
       try {
@@ -119,13 +123,13 @@ export default function CheckoutClient() {
     ];
 
     updatePaymentIntent(
-      total,
+      currentTotal,
       items,
       includeCprSign,
       formData,
       paymentIntentId // Keep existing payment intent ID
     );
-  }, [total, includeCprSign, formData, formValid, paymentIntentId, updatePaymentIntent]);
+  }, [currentTotal, includeCprSign, formData, formValid, paymentIntentId, updatePaymentIntent]);
 
   const createOrUpdatePaymentIntent = useCallback(async (
     amount: number,
@@ -178,7 +182,6 @@ export default function CheckoutClient() {
         ...(includeCprSign ? [cprSignService] : [])
       ];
 
-      const currentTotal = basePrice + (includeCprSign ? cprSignPrice : 0);
       console.log('Processing express payment with total:', currentTotal);
 
       const result = await createOrUpdatePaymentIntent(
@@ -208,7 +211,6 @@ export default function CheckoutClient() {
         ...(includeCprSign ? [cprSignService] : [])
       ];
 
-      const currentTotal = basePrice + (includeCprSign ? cprSignPrice : 0);
       console.log('Processing standard payment with total:', currentTotal);
 
       const { clientSecret: newClientSecret, paymentIntentId: newPaymentIntentId } = await createOrUpdatePaymentIntent(
@@ -300,17 +302,17 @@ export default function CheckoutClient() {
                 <div className="space-y-4">
                   <div className="flex justify-between">
                     <span>Pool Safety Inspection</span>
-                    <span>${basePrice}</span>
+                    <span>${defaultService.price}</span>
                   </div>
                   {includeCprSign && (
                     <div className="flex justify-between text-teal-600">
                       <span>CPR Sign</span>
-                      <span>${cprSignPrice}</span>
+                      <span>${cprSignService.price}</span>
                     </div>
                   )}
                   <div className="border-t pt-4 flex justify-between font-semibold">
                     <span>Total</span>
-                    <span>${total}</span>
+                    <span>${currentTotal}</span>
                   </div>
                 </div>
 
@@ -500,7 +502,7 @@ export default function CheckoutClient() {
                       <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
                       <PaymentForm
                         clientSecret={clientSecret}
-                        amount={total}
+                        amount={currentTotal}
                         onSubmit={handleExpressPayment}
                       />
                     </div>
@@ -537,7 +539,7 @@ export default function CheckoutClient() {
                         (isSubmitting || !formValid) ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
-                      {isSubmitting ? 'Processing...' : `Pay $${total}`}
+                      {isSubmitting ? 'Processing...' : `Pay $${currentTotal}`}
                     </button>
                   </div>
                 </form>
