@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   PaymentElement,
@@ -9,28 +9,11 @@ import {
   Elements as StripeElements,
   PaymentRequestButtonElement,
 } from "@stripe/react-stripe-js";
-import type { Appearance, PaymentRequest, PaymentRequestPaymentMethodEvent } from '@stripe/stripe-js';
+import type { Appearance, PaymentRequest } from '@stripe/stripe-js';
 import { useRouter } from "next/navigation";
 import Image from 'next/image';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
-
-type PaymentElementOptions = {
-  clientSecret: string;
-  appearance?: Appearance;
-};
-
-type StripePaymentResult = {
-  id: string;
-  status: string;
-  client_secret?: string;
-};
-
-declare global {
-  interface Window {
-    confirmStripePayment: undefined | (() => Promise<StripePaymentResult>);
-  }
-}
 
 interface PaymentFormProps {
   clientSecret: string;
@@ -42,160 +25,139 @@ interface PaymentFormProps {
   }) => Promise<{ clientSecret: string }>;
 }
 
-function PaymentFormContent({ amount, onSubmit, clientSecret }: { 
-  amount: number;
-  onSubmit: PaymentFormProps['onSubmit'];
-  clientSecret: string;
-}) {
+function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
-  const [paymentMethod, setPaymentMethod] = useState<string>('card');
   const [error, setError] = useState<string | null>(null);
-  const [showButton, setShowButton] = useState(false);
-  const prRef = useRef<PaymentRequest | null>(null);
-  const mountedRef = useRef(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
 
-  // Update payment request amount
-  const updatePaymentRequestAmount = useCallback((pr: PaymentRequest, currentAmount: number) => {
-    const validAmount = Math.round(currentAmount * 100) / 100;
-    pr.update({
-      total: {
-        label: validAmount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-        amount: Math.round(validAmount * 100),
-      }
-    });
-  }, []);
-
-  // Initialize payment request
-  useEffect(() => {
-    if (!stripe || !elements || !mountedRef.current) return;
-
-    const initializePaymentRequest = async () => {
-      try {
-        if (!prRef.current) {
-          const pr = stripe.paymentRequest({
-            country: 'AU',
-            currency: 'aud',
-            total: {
-              label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-              amount: Math.round(amount * 100),
-            },
-            requestShipping: false,
-            requestPayerName: true,
-            requestPayerEmail: true,
-            disableWallets: ['link'],
-          });
-
-          const result = await pr.canMakePayment();
-          if (!mountedRef.current) return;
-
-          if (result) {
-            pr.on('paymentmethod', async (event: PaymentRequestPaymentMethodEvent) => {
-              try {
-                setError(null);
-                const { clientSecret: newClientSecret } = await onSubmit({
-                  name: event.payerName || '',
-                  email: event.payerEmail || '',
-                  paymentMethod: event.paymentMethod.type,
-                });
-
-                if (!stripe) return;
-
-                const { error: confirmError } = await stripe.confirmCardPayment(
-                  newClientSecret || clientSecret,
-                  {
-                    payment_method: event.paymentMethod.id,
-                    receipt_email: event.payerEmail,
-                  }
-                );
-
-                if (confirmError) {
-                  event.complete('fail');
-                  throw new Error(confirmError.message);
-                }
-
-                event.complete('success');
-                router.push("/checkout/success");
-              } catch (error: any) {
-                setError(error.message || 'Payment failed. Please try again.');
-                event.complete('fail');
-              }
-            });
-
-            prRef.current = pr;
-            setShowButton(true);
-          }
-        } else {
-          updatePaymentRequestAmount(prRef.current, amount);
-        }
-      } catch (error: any) {
-        console.error('Error initializing payment request:', error);
-        setError('Error initializing payment. Please try again.');
-      }
-    };
-
-    initializePaymentRequest();
-
-    return () => {
-      if (prRef.current) {
-        prRef.current.off('paymentmethod');
-      }
-    };
-  }, [stripe, elements, amount, onSubmit, clientSecret, router, updatePaymentRequestAmount]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (prRef.current) {
-        prRef.current.off('paymentmethod');
-        prRef.current = null;
-      }
-    };
-  }, []);
-
+  // Initialize Express Checkout
   useEffect(() => {
     if (!stripe || !elements) return;
 
-    window.confirmStripePayment = async () => {
-      if (!stripe || !elements) {
-        throw new Error("Stripe not initialized");
+    const pr = stripe.paymentRequest({
+      country: 'AU',
+      currency: 'aud',
+      total: {
+        label: 'Pool Safety Inspection',
+        amount: Math.round(amount * 100),
+      },
+      requestPayerName: true,
+      requestPayerEmail: true,
+      disableWallets: ['link'],
+    });
+
+    // Check device compatibility
+    pr.canMakePayment().then((result) => {
+      if (result) {
+        setPaymentRequest(pr);
+      }
+    });
+
+    // Handle Express Checkout payment
+    pr.on('paymentmethod', async (event) => {
+      try {
+        setError(null);
+        setIsProcessing(true);
+
+        const { clientSecret: newClientSecret } = await onSubmit({
+          name: event.payerName || '',
+          email: event.payerEmail || '',
+          paymentMethod: event.paymentMethod.type,
+        });
+
+        const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+          newClientSecret || clientSecret,
+          {
+            payment_method: event.paymentMethod.id,
+            receipt_email: event.payerEmail,
+          }
+        );
+
+        if (confirmError) {
+          throw new Error(confirmError.message);
+        }
+
+        if (paymentIntent.status === 'succeeded') {
+          event.complete('success');
+          router.push("/checkout/success");
+        } else {
+          throw new Error('Payment failed');
+        }
+      } catch (error: any) {
+        setError(error.message || 'Payment failed. Please try again.');
+        event.complete('fail');
+      } finally {
+        setIsProcessing(false);
+      }
+    });
+
+    return () => {
+      pr.off('paymentmethod');
+    };
+  }, [stripe, elements, amount, onSubmit, clientSecret, router]);
+
+  // Update Express Checkout amount
+  useEffect(() => {
+    if (paymentRequest) {
+      paymentRequest.update({
+        total: {
+          label: 'Pool Safety Inspection',
+          amount: Math.round(amount * 100),
+        },
+      });
+    }
+  }, [amount, paymentRequest]);
+
+  // Handle standard checkout
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!stripe || !elements) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setIsProcessing(true);
+
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        throw new Error(submitError.message);
       }
 
-      const result = await stripe.confirmPayment({
+      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
         elements,
-        redirect: "if_required",
         confirmParams: {
           return_url: window.location.origin + "/checkout/success",
         },
+        redirect: "if_required",
       });
 
-      if (result.error) {
-        throw new Error(result.error.message);
+      if (confirmError) {
+        throw new Error(confirmError.message);
       }
 
-      const { id, status, client_secret } = result.paymentIntent;
-      return {
-        id,
-        status,
-        client_secret: client_secret || undefined,
-      };
-    };
-
-    return () => {
-      window.confirmStripePayment = undefined;
-    };
-  }, [stripe, elements]);
+      if (paymentIntent.status === 'succeeded') {
+        router.push("/checkout/success");
+      } else {
+        throw new Error('Payment failed');
+      }
+    } catch (error: any) {
+      setError(error.message || 'Payment failed. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          {/* Stripe Badge */}
           <Image
-            src="https://stripe.com/img/documentation/checkout/marketplace.png"
+            src="/images/powered-by-stripe.svg"
             alt="Powered by Stripe"
             width={120}
             height={32}
@@ -203,42 +165,23 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
           />
           <div className="flex items-center">
             <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15l-4-4h8l-4 4z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
             <span className="text-sm text-gray-600">SSL Secure Payment</span>
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          {/* Payment Method Icons */}
-          <Image
-            src="https://js.stripe.com/v3/fingerprinted/img/visa-365725566f9578a9589553aa9296d178.svg"
-            alt="Visa"
-            width={40}
-            height={24}
-            className="h-6 w-auto"
-          />
-          <Image
-            src="https://js.stripe.com/v3/fingerprinted/img/mastercard-4d8844094130711885b5e41b28c9848f.svg"
-            alt="Mastercard"
-            width={40}
-            height={24}
-            className="h-6 w-auto"
-          />
-          <Image
-            src="https://js.stripe.com/v3/fingerprinted/img/amex-a49b82f46c5cd6a96a6e418a6ca1717c.svg"
-            alt="American Express"
-            width={40}
-            height={24}
-            className="h-6 w-auto"
-          />
+          <Image src="/images/payment-icons/visa.svg" alt="Visa" width={40} height={24} className="h-6 w-auto" />
+          <Image src="/images/payment-icons/mastercard.svg" alt="Mastercard" width={40} height={24} className="h-6 w-auto" />
+          <Image src="/images/payment-icons/amex.svg" alt="American Express" width={40} height={24} className="h-6 w-auto" />
         </div>
       </div>
 
-      {showButton && prRef.current && (
-        <div className="mb-4">
+      {paymentRequest && (
+        <div className="mb-6">
           <PaymentRequestButtonElement
             options={{
-              paymentRequest: prRef.current,
+              paymentRequest,
               style: {
                 paymentRequestButton: {
                   type: 'buy',
@@ -255,7 +198,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       )}
 
       {error && (
-        <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-lg">
+        <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -269,7 +212,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         </div>
       )}
 
-      <div className="bg-blue-50 p-4 rounded-lg mb-6">
+      <div className="bg-blue-50 p-4 rounded mb-6">
         <div className="flex items-start">
           <div className="flex-shrink-0">
             <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
@@ -284,38 +227,40 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         </div>
       </div>
 
-      <div className="mb-6">
-        <PaymentElement 
-          options={{
-            defaultValues: {
-              billingDetails: {
-                name: '',
-              }
+      <PaymentElement
+        options={{
+          layout: "tabs",
+          defaultValues: {
+            billingDetails: {
+              name: '',
             }
-          }}
-          onChange={(event) => {
-            if (event.value?.type) {
-              setPaymentMethod(event.value.type);
-            }
-          }}
-        />
-      </div>
+          }
+        }}
+      />
 
-      {paymentMethod === 'card' && (
-        <div className="text-sm text-gray-500 flex items-center">
-          <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 116 0z" clipRule="evenodd" />
-          </svg>
-          Your card information is encrypted and secure
-        </div>
-      )}
-    </div>
+      <button
+        type="submit"
+        disabled={!stripe || !elements || isProcessing}
+        className={`w-full bg-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-teal-700 transition duration-300 ${
+          (!stripe || !elements || isProcessing) ? 'opacity-50 cursor-not-allowed' : ''
+        }`}
+      >
+        {isProcessing ? 'Processing...' : `Pay $${amount}`}
+      </button>
+
+      <div className="text-sm text-gray-500 flex items-center justify-center mt-4">
+        <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 116 0z" clipRule="evenodd" />
+        </svg>
+        Your card information is encrypted and secure
+      </div>
+    </form>
   );
 }
 
-export default function PaymentForm({ clientSecret, amount, onSubmit }: PaymentFormProps) {
+export default function PaymentForm(props: PaymentFormProps) {
   const appearance: Appearance = {
-    theme: 'stripe' as const,
+    theme: 'stripe',
     variables: {
       colorPrimary: "#0d9488",
       colorBackground: "#ffffff",
@@ -337,14 +282,15 @@ export default function PaymentForm({ clientSecret, amount, onSubmit }: PaymentF
     },
   };
 
-  const options: PaymentElementOptions = {
-    clientSecret,
-    appearance,
-  };
-
   return (
-    <StripeElements stripe={stripePromise} options={options}>
-      <PaymentFormContent amount={amount} onSubmit={onSubmit} clientSecret={clientSecret} />
+    <StripeElements
+      stripe={stripePromise}
+      options={{
+        clientSecret: props.clientSecret,
+        appearance,
+      }}
+    >
+      <PaymentFormContent {...props} />
     </StripeElements>
   );
 }

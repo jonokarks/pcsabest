@@ -31,7 +31,6 @@ interface RequestBody {
   items: Item[];
   includeCprSign: boolean;
   customerDetails?: CustomerDetails;
-  paymentIntentId?: string;
   isExpressCheckout?: boolean;
 }
 
@@ -42,7 +41,15 @@ const corsHeaders = {
   'Access-Control-Allow-Credentials': 'true',
 } as const;
 
+const validateAmount = (amount: number, items: Item[], includeCprSign: boolean): boolean => {
+  const basePrice = items.find(item => item.id === 'pool-inspection')?.price || 210;
+  const cprSignPrice = includeCprSign ? 30 : 0;
+  const expectedAmount = basePrice + cprSignPrice;
+  return Math.abs(amount - expectedAmount) < 0.01; // Account for floating point precision
+};
+
 export const handler: Handler = async (event: HandlerEvent) => {
+  // Handle CORS preflight requests
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -54,6 +61,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers: corsHeaders,
       body: JSON.stringify({ error: 'Method not allowed' }),
     };
   }
@@ -64,163 +72,87 @@ export const handler: Handler = async (event: HandlerEvent) => {
     }
 
     const body = JSON.parse(event.body || '{}') as RequestBody;
-    const { items, includeCprSign, customerDetails, paymentIntentId, isExpressCheckout } = body;
+    const { amount, items, includeCprSign, customerDetails, isExpressCheckout } = body;
 
-    // Calculate expected amount
-    const basePrice = items.find(item => item.id === 'pool-inspection')?.price || 210;
-    const cprSignPrice = includeCprSign ? 30 : 0;
-    const expectedAmount = basePrice + cprSignPrice;
-    
-    // Convert amount to cents
-    const amountInCents = Math.round(expectedAmount * 100);
+    // Validate request data
+    if (!amount || !items?.length) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Invalid request data' }),
+      };
+    }
 
-    // Log the payment details for debugging
-    console.log('Payment Details:', {
-      basePrice,
-      cprSignPrice,
-      expectedAmount,
-      amountInCents,
-      includeCprSign,
-      isExpressCheckout
-    });
-
-    // Prepare metadata with customer details
-    const metadata: Record<string, string> = {
-      firstName: customerDetails?.firstName || '',
-      lastName: customerDetails?.lastName || '',
-      email: customerDetails?.email || '',
-      phone: customerDetails?.phone || '',
-      address: customerDetails?.address || '',
-      suburb: customerDetails?.suburb || '',
-      postcode: customerDetails?.postcode || '',
-      preferredDate: customerDetails?.preferredDate || '',
-      notes: customerDetails?.notes || '',
-      includeCprSign: includeCprSign ? "true" : "false",
-      items: JSON.stringify(items.map(item => item.name))
-    };
-
-    // Prepare customer email data
-    const customerEmail = customerDetails?.email;
-    const description = `Pool Safety Inspection${includeCprSign ? ' with CPR Sign' : ''}`;
-
-    // Log payment intent creation details
-    console.log('Creating payment intent with:', {
-      amountInCents,
-      description,
-      includeCprSign,
-      isExpressCheckout
-    });
-
-    // Validate the amount matches what's expected
-    if (body.amount && Math.round(body.amount * 100) !== amountInCents) {
+    // Validate amount matches items
+    if (!validateAmount(amount, items, includeCprSign)) {
       console.error('Amount mismatch:', {
-        provided: Math.round(body.amount * 100),
-        calculated: amountInCents
+        provided: amount,
+        items,
+        includeCprSign,
       });
-      throw new Error('Amount mismatch detected');
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Amount mismatch detected' }),
+      };
     }
 
-    const paymentIntentData = {
-      amount: amountInCents,
-      currency: "aud",
-      metadata: {
-        ...metadata,
-        timestamp: Date.now().toString(), // Add timestamp to metadata
-      },
-      description,
-      receipt_email: customerEmail,
-      automatic_payment_methods: {
-        enabled: true,
-      } as const,
+    // Convert amount to cents for Stripe
+    const amountInCents = Math.round(amount * 100);
+
+    // Prepare metadata
+    const metadata: Record<string, string> = {
+      items: JSON.stringify(items.map(item => item.name)),
+      includeCprSign: includeCprSign ? 'true' : 'false',
+      timestamp: Date.now().toString(),
+      ...(customerDetails && Object.entries(customerDetails).reduce((acc, [key, value]) => ({
+        ...acc,
+        [key]: String(value || ''),
+      }), {})),
     };
 
-    let paymentIntent;
+    // Create payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: 'aud',
+      metadata,
+      description: `Pool Safety Inspection${includeCprSign ? ' with CPR Sign' : ''}`,
+      receipt_email: customerDetails?.email,
+      automatic_payment_methods: { enabled: true },
+      setup_future_usage: isExpressCheckout ? undefined : 'off_session',
+    });
 
-    try {
-      // For express checkout or amount changes, always create a new payment intent
-      if (isExpressCheckout || (paymentIntentId && body.amount)) {
-        console.log('Creating new payment intent for express checkout or amount change');
-        
-        // If there's an existing payment intent, cancel it first
-        if (paymentIntentId) {
-          try {
-            const existingIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-            if (existingIntent.status !== 'succeeded' && existingIntent.status !== 'canceled') {
-              console.log('Canceling existing payment intent:', paymentIntentId);
-              await stripe.paymentIntents.cancel(paymentIntentId);
-            }
-          } catch (error) {
-            console.warn('Error handling existing payment intent:', error);
-            // Continue with new payment intent creation even if cleanup fails
-          }
-        }
-
-        // Create new payment intent
-        paymentIntent = await stripe.paymentIntents.create({
-          ...paymentIntentData,
-          setup_future_usage: isExpressCheckout ? 'off_session' : undefined,
-        });
-      } else {
-        if (paymentIntentId) {
-          console.log('Updating existing payment intent:', paymentIntentId);
-          
-          // Verify existing payment intent status
-          const existingIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-          if (existingIntent.status === 'succeeded' || existingIntent.status === 'canceled') {
-            console.log('Creating new payment intent as existing one is', existingIntent.status);
-            paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
-          } else {
-            // Update existing payment intent
-            paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
-              metadata: {
-                ...metadata,
-                timestamp: Date.now().toString(),
-              },
-              description,
-              receipt_email: customerEmail,
-            });
-          }
-        } else {
-          console.log('Creating new payment intent');
-          paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
-        }
-      }
-
-      console.log('Payment intent operation successful:', {
-        id: paymentIntent.id,
-        amount: paymentIntent.amount,
-        status: paymentIntent.status
-      });
-    } catch (error) {
-      console.error('Error in payment intent operation:', error);
-      throw error;
-    }
+    // Log success for monitoring
+    console.log('Payment intent created:', {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      status: paymentIntent.status,
+    });
 
     return {
       statusCode: 200,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'Surrogate-Control': 'no-store',
-      } as const,
+        'Cache-Control': 'no-store',
+      },
       body: JSON.stringify({
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
       }),
     };
   } catch (error) {
-    console.error("Error in payment intent function:", error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Log error for debugging
+    console.error('Error creating payment intent:', error);
 
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+    
     return {
       statusCode: 500,
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json',
-      } as const,
+      },
       body: JSON.stringify({ error: errorMessage }),
     };
   }
