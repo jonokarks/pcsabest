@@ -91,58 +91,53 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
     const initializePaymentRequest = async () => {
       try {
-        if (prRef.current) {
-          // Update existing payment request
-          prRef.current.update({
-            total: {
-              label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-              amount: amount * 100,
+        // Always create a new payment request to ensure fresh state
+        const pr = createPaymentRequest();
+        if (!pr) return;
+
+        const result = await pr.canMakePayment();
+        if (!mounted) return;
+
+        if (result) {
+          // Clean up old payment request listeners
+          if (prRef.current) {
+            prRef.current.removeAllListeners();
+          }
+
+          prRef.current = pr;
+          setPaymentRequest(pr);
+          setIsPaymentRequestVisible(true);
+
+          // Handle payment request button events with fresh amount
+          pr.on('paymentmethod', async (event: any) => {
+            try {
+              setError(null);
+              const { clientSecret: newClientSecret } = await onSubmit({
+                name: event.payerName || '',
+                email: event.payerEmail || '',
+                paymentMethod: event.paymentMethod.type,
+              });
+
+              const { error: confirmError } = await stripe.confirmCardPayment(
+                newClientSecret || clientSecret,
+                {
+                  payment_method: event.paymentMethod.id,
+                  receipt_email: event.payerEmail,
+                }
+              );
+
+              if (confirmError) {
+                event.complete('fail');
+                throw new Error(confirmError.message);
+              }
+
+              event.complete('success');
+              router.push("/checkout/success");
+            } catch (error: any) {
+              setError(error.message || 'Payment failed. Please try again.');
+              event.complete('fail');
             }
           });
-        } else {
-          // Create new payment request
-          const pr = createPaymentRequest();
-          if (!pr) return;
-
-          const result = await pr.canMakePayment();
-          if (!mounted) return;
-
-          if (result) {
-            prRef.current = pr;
-            setPaymentRequest(pr);
-            setIsPaymentRequestVisible(true);
-
-            // Handle payment request button events
-            pr.on('paymentmethod', async (event: any) => {
-              try {
-                setError(null);
-                const { clientSecret: newClientSecret } = await onSubmit({
-                  name: event.payerName || '',
-                  email: event.payerEmail || '',
-                  paymentMethod: event.paymentMethod.type,
-                });
-
-                const { error: confirmError } = await stripe.confirmCardPayment(
-                  newClientSecret || clientSecret,
-                  {
-                    payment_method: event.paymentMethod.id,
-                    receipt_email: event.payerEmail,
-                  }
-                );
-
-                if (confirmError) {
-                  event.complete('fail');
-                  throw new Error(confirmError.message);
-                }
-
-                event.complete('success');
-                router.push("/checkout/success");
-              } catch (error: any) {
-                setError(error.message || 'Payment failed. Please try again.');
-                event.complete('fail');
-              }
-            });
-          }
         }
       } catch (error: any) {
         console.error('Error initializing payment request:', error);

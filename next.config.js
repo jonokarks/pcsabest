@@ -43,6 +43,10 @@ const nextConfig = {
             },
           ],
         },
+        {
+          source: '/.well-known/apple-developer-merchantid-domain-association',
+          destination: '/apple-developer-merchantid-domain-association',
+        },
       ],
     };
   },
