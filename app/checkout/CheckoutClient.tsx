@@ -115,20 +115,46 @@ export default function CheckoutClient() {
 
   // Update payment intent when total or form data changes
   useEffect(() => {
-    if (!formValid || !formData) return; // Only update if form is valid and has data
+    let timeoutId: NodeJS.Timeout;
 
-    const items = [
-      defaultService,
-      ...(includeCprSign ? [cprSignService] : [])
-    ];
+    const updateIntent = async () => {
+      if (!formValid || !formData) return;
 
-    updatePaymentIntent(
-      currentTotal,
-      items,
-      includeCprSign,
-      formData,
-      paymentIntentId // Keep existing payment intent ID
-    );
+      try {
+        console.log('Updating payment intent with new total:', currentTotal);
+        
+        const items = [
+          defaultService,
+          ...(includeCprSign ? [cprSignService] : [])
+        ];
+
+        // Clear existing client secret to hide payment elements during update
+        setClientSecret('');
+        
+        // Add small delay to ensure proper cleanup
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        await updatePaymentIntent(
+          currentTotal,
+          items,
+          includeCprSign,
+          formData,
+          paymentIntentId
+        );
+
+        console.log('Payment intent updated successfully');
+      } catch (error) {
+        console.error('Error updating payment intent:', error);
+        setError('Failed to update payment. Please try again.');
+      }
+    };
+
+    // Debounce updates to prevent rapid re-renders
+    timeoutId = setTimeout(updateIntent, 300);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [currentTotal, includeCprSign, formData, formValid, paymentIntentId, updatePaymentIntent]);
 
   const createOrUpdatePaymentIntent = useCallback(async (
@@ -139,33 +165,59 @@ export default function CheckoutClient() {
     isExpressCheckout: boolean = false,
     existingPaymentIntentId: string | null = null
   ) => {
+    console.log('Creating/updating payment intent:', {
+      amount,
+      includeCprSign,
+      isExpressCheckout,
+      hasExistingIntent: !!existingPaymentIntentId
+    });
+    // Validate amount
+    const validAmount = Math.round(amount * 100) / 100;
+    
     const response = await fetch('/.netlify/functions/create-payment-intent', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        amount,
+        amount: validAmount,
         items,
         includeCprSign,
         customerDetails,
         isExpressCheckout,
         paymentIntentId: existingPaymentIntentId,
+        timestamp: Date.now(), // Add timestamp to prevent caching
       }),
     });
 
     if (!response.ok) {
-      console.error('Failed to create/update payment intent:', response.status, response.statusText);
-      throw new Error('Failed to process payment');
+      const errorText = await response.text();
+      console.error('Failed to create/update payment intent:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error('Failed to process payment. Please try again.');
     }
 
-    const result = await response.json();
-    if (result.error) {
-      console.error('Payment intent error:', result.error);
-      throw new Error(result.error);
-    }
+    try {
+      const result = await response.json();
+      
+      if (result.error) {
+        console.error('Payment intent error:', result.error);
+        throw new Error(result.error);
+      }
 
-    return result;
+      console.log('Payment intent created/updated successfully:', {
+        hasClientSecret: !!result.clientSecret,
+        hasPaymentIntentId: !!result.paymentIntentId
+      });
+
+      return result;
+    } catch (error) {
+      console.error('Error parsing payment intent response:', error);
+      throw new Error('Invalid response from payment service');
+    }
   }, []);
 
   const handleExpressPayment = async (data: { name?: string; email?: string; paymentMethod?: string }) => {

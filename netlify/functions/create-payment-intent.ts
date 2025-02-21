@@ -111,10 +111,22 @@ export const handler: Handler = async (event: HandlerEvent) => {
       isExpressCheckout
     });
 
+    // Validate the amount matches what's expected
+    if (body.amount && Math.round(body.amount * 100) !== amountInCents) {
+      console.error('Amount mismatch:', {
+        provided: Math.round(body.amount * 100),
+        calculated: amountInCents
+      });
+      throw new Error('Amount mismatch detected');
+    }
+
     const paymentIntentData = {
       amount: amountInCents,
       currency: "aud",
-      metadata,
+      metadata: {
+        ...metadata,
+        timestamp: Date.now().toString(), // Add timestamp to metadata
+      },
       description,
       receipt_email: customerEmail,
       automatic_payment_methods: {
@@ -125,23 +137,51 @@ export const handler: Handler = async (event: HandlerEvent) => {
     let paymentIntent;
 
     try {
-      // For express checkout, always create a new payment intent
-      if (isExpressCheckout) {
-        console.log('Creating new payment intent for express checkout');
-        paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+      // For express checkout or amount changes, always create a new payment intent
+      if (isExpressCheckout || (paymentIntentId && body.amount)) {
+        console.log('Creating new payment intent for express checkout or amount change');
+        
+        // If there's an existing payment intent, cancel it first
+        if (paymentIntentId) {
+          try {
+            const existingIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+            if (existingIntent.status !== 'succeeded' && existingIntent.status !== 'canceled') {
+              console.log('Canceling existing payment intent:', paymentIntentId);
+              await stripe.paymentIntents.cancel(paymentIntentId);
+            }
+          } catch (error) {
+            console.warn('Error handling existing payment intent:', error);
+            // Continue with new payment intent creation even if cleanup fails
+          }
+        }
+
+        // Create new payment intent
+        paymentIntent = await stripe.paymentIntents.create({
+          ...paymentIntentData,
+          setup_future_usage: isExpressCheckout ? 'off_session' : undefined,
+        });
       } else {
         if (paymentIntentId) {
           console.log('Updating existing payment intent:', paymentIntentId);
-          // Update existing payment intent
-          paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
-            amount: amountInCents,
-            metadata,
-            description,
-            receipt_email: customerEmail,
-          });
+          
+          // Verify existing payment intent status
+          const existingIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          if (existingIntent.status === 'succeeded' || existingIntent.status === 'canceled') {
+            console.log('Creating new payment intent as existing one is', existingIntent.status);
+            paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
+          } else {
+            // Update existing payment intent
+            paymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
+              metadata: {
+                ...metadata,
+                timestamp: Date.now().toString(),
+              },
+              description,
+              receipt_email: customerEmail,
+            });
+          }
         } else {
           console.log('Creating new payment intent');
-          // Create new payment intent
           paymentIntent = await stripe.paymentIntents.create(paymentIntentData);
         }
       }
@@ -161,8 +201,10 @@ export const handler: Handler = async (event: HandlerEvent) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, must-revalidate',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store',
       } as const,
       body: JSON.stringify({
         clientSecret: paymentIntent.client_secret,

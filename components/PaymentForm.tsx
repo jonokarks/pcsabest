@@ -54,18 +54,24 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPaymentRequestVisible, setIsPaymentRequestVisible] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const prRef = useRef<PaymentRequest | null>(null);
+  const mountedRef = useRef(true);
 
   // Create payment request instance
   const createPaymentRequest = useCallback((currentAmount: number) => {
     if (!stripe) return null;
-    console.log('Creating payment request with amount:', currentAmount);
+    
+    // Validate amount
+    const validAmount = Math.round(currentAmount * 100) / 100;
+    console.log('Creating payment request with amount:', validAmount);
+    
     const pr = stripe.paymentRequest({
       country: 'AU',
       currency: 'aud',
       total: {
-        label: currentAmount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-        amount: currentAmount * 100,
+        label: validAmount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+        amount: Math.round(validAmount * 100), // Ensure integer amount in cents
       },
       requestShipping: false,
       requestPayerName: true,
@@ -112,50 +118,76 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
   // Initialize and update payment request when amount changes
   useEffect(() => {
-    if (!stripe || !elements) return;
-    let mounted = true;
+    if (!stripe || !elements || isUpdating) return;
 
     const initializePaymentRequest = async () => {
       try {
-        // Clean up existing payment request
+        setIsUpdating(true);
+        console.log('Initializing payment request...');
+
+        // First, clean up existing payment request and hide button
+        setIsPaymentRequestVisible(false);
         if (prRef.current) {
+          console.log('Cleaning up existing payment request...');
           prRef.current.off('paymentmethod');
+          prRef.current = null;
           setPaymentRequest(null);
-          setIsPaymentRequestVisible(false);
         }
 
+        // Wait for cleanup to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (!mountedRef.current) return;
+
         // Create new payment request with current amount
+        console.log('Creating new payment request...');
         const pr = createPaymentRequest(amount);
         if (!pr) return;
 
         const result = await pr.canMakePayment();
-        if (!mounted) return;
+        if (!mountedRef.current) return;
 
         if (result) {
+          console.log('Payment request can make payment, updating state...');
           prRef.current = pr;
           setPaymentRequest(pr);
-          setIsPaymentRequestVisible(true);
-          console.log('New payment request created with amount:', amount);
+          
+          // Small delay before showing button to ensure clean transition
+          setTimeout(() => {
+            if (mountedRef.current) {
+              setIsPaymentRequestVisible(true);
+              console.log('Payment request button visible');
+            }
+          }, 100);
+        } else {
+          console.log('Payment request cannot make payment');
         }
       } catch (error: any) {
         console.error('Error initializing payment request:', error);
         setError('Error initializing payment. Please try again.');
+      } finally {
+        if (mountedRef.current) {
+          setIsUpdating(false);
+        }
       }
     };
 
     initializePaymentRequest();
 
     return () => {
-      mounted = false;
       if (prRef.current) {
         prRef.current.off('paymentmethod');
+        prRef.current = null;
       }
     };
-  }, [stripe, elements, createPaymentRequest, amount]); // Re-initialize when amount changes
+  }, [stripe, elements, createPaymentRequest, amount, isUpdating]); // Re-initialize when amount changes
 
   // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true;
+    
     return () => {
+      mountedRef.current = false;
       if (prRef.current) {
         prRef.current.off('paymentmethod');
         prRef.current = null;
