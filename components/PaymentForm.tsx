@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import PaymentIcons from "./PaymentIcons";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   PaymentElement,
@@ -199,11 +200,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
             <span className="text-sm text-gray-600">SSL Secure Payment</span>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <Image src="/images/payment-icons/visa.svg" alt="Visa" width={40} height={24} className="h-6 w-auto" />
-          <Image src="/images/payment-icons/mastercard.svg" alt="Mastercard" width={40} height={24} className="h-6 w-auto" />
-          <Image src="/images/payment-icons/amex.svg" alt="American Express" width={40} height={24} className="h-6 w-auto" />
-        </div>
+        <PaymentIcons />
       </div>
 
       {paymentRequest && (
