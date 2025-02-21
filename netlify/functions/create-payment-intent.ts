@@ -48,6 +48,35 @@ const validateAmount = (amount: number, items: Item[], includeCprSign: boolean):
   return Math.abs(amount - expectedAmount) < 0.01; // Account for floating point precision
 };
 
+// Cancel any existing incomplete payment intents for the customer
+const cancelExistingPaymentIntents = async (customerEmail: string) => {
+  try {
+    const thirtyMinutesAgo = Math.floor(Date.now() / 1000) - (30 * 60);
+    const paymentIntents = await stripe.paymentIntents.list({
+      limit: 10, // Limit to recent intents
+      created: { gte: thirtyMinutesAgo },
+    });
+
+    // Find and cancel incomplete payment intents for this customer
+    const cancelPromises = paymentIntents.data
+      .filter(pi => 
+        // Match by email in metadata or receipt_email
+        (pi.metadata.email === customerEmail || pi.receipt_email === customerEmail) &&
+        // Only cancel incomplete intents
+        ['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(pi.status)
+      )
+      .map(pi => stripe.paymentIntents.cancel(pi.id));
+
+    if (cancelPromises.length > 0) {
+      console.log(`Canceling ${cancelPromises.length} incomplete payment intents for ${customerEmail}`);
+      await Promise.all(cancelPromises);
+    }
+  } catch (error) {
+    console.error('Error canceling existing payment intents:', error);
+    // Continue with creating new payment intent even if cleanup fails
+  }
+};
+
 export const handler: Handler = async (event: HandlerEvent) => {
   // Handle CORS preflight requests
   if (event.httpMethod === 'OPTIONS') {
@@ -97,6 +126,11 @@ export const handler: Handler = async (event: HandlerEvent) => {
       };
     }
 
+    // Cancel existing incomplete payment intents if we have customer email
+    if (customerDetails?.email) {
+      await cancelExistingPaymentIntents(customerDetails.email);
+    }
+
     // Convert amount to cents for Stripe
     const amountInCents = Math.round(amount * 100);
 
@@ -104,7 +138,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
     const metadata: Record<string, string> = {
       items: JSON.stringify(items.map(item => item.name)),
       includeCprSign: includeCprSign ? 'true' : 'false',
-      timestamp: Date.now().toString(),
+      createdAt: Date.now().toString(),
       ...(customerDetails && Object.entries(customerDetails).reduce((acc, [key, value]) => ({
         ...acc,
         [key]: String(value || ''),
@@ -120,6 +154,11 @@ export const handler: Handler = async (event: HandlerEvent) => {
       receipt_email: customerDetails?.email,
       automatic_payment_methods: { enabled: true },
       setup_future_usage: isExpressCheckout ? undefined : 'off_session',
+      payment_method_options: {
+        card: {
+          setup_future_usage: undefined,
+        },
+      },
     });
 
     // Log success for monitoring
@@ -127,6 +166,7 @@ export const handler: Handler = async (event: HandlerEvent) => {
       id: paymentIntent.id,
       amount: paymentIntent.amount,
       status: paymentIntent.status,
+      createdAt: metadata.createdAt,
     });
 
     return {

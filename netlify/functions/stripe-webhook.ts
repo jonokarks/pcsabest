@@ -166,6 +166,38 @@ const sendRefundNotification = async (charge: Stripe.Charge, refund: Stripe.Refu
   await sendEmail(adminEmailData);
 };
 
+// Clean up old incomplete payment intents
+const cleanupIncompletePaymentIntents = async () => {
+  try {
+    const thirtyMinutesAgo = Math.floor(Date.now() / 1000) - (30 * 60);
+    const paymentIntents = await stripe.paymentIntents.list({
+      created: { lt: thirtyMinutesAgo },
+      limit: 100,
+    });
+
+    const incompleteIntents = paymentIntents.data.filter(pi =>
+      ['requires_payment_method', 'requires_confirmation', 'requires_action'].includes(pi.status)
+    );
+
+    if (incompleteIntents.length > 0) {
+      console.log(`Found ${incompleteIntents.length} old incomplete payment intents to clean up`);
+      
+      await Promise.all(
+        incompleteIntents.map(async (pi) => {
+          try {
+            await stripe.paymentIntents.cancel(pi.id);
+            console.log(`Canceled payment intent: ${pi.id}`);
+          } catch (error) {
+            console.error(`Error canceling payment intent ${pi.id}:`, error);
+          }
+        })
+      );
+    }
+  } catch (error) {
+    console.error('Error cleaning up incomplete payment intents:', error);
+  }
+};
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -277,6 +309,9 @@ export const handler: Handler = async (event) => {
         break;
       }
     }
+
+    // Clean up old incomplete payment intents periodically
+    await cleanupIncompletePaymentIntents();
 
     return {
       statusCode: 200,
