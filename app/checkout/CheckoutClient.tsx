@@ -64,7 +64,7 @@ export default function CheckoutClient() {
     let loadingTimeoutId: NodeJS.Timeout;
 
     const updatePaymentIntent = async () => {
-      if (!isValid) return;
+      if (!isValid || !showPayment) return;
 
       try {
         // Debounce loading state to prevent quick flashes
@@ -108,7 +108,7 @@ export default function CheckoutClient() {
       clearTimeout(timeoutId);
       clearTimeout(loadingTimeoutId);
     };
-  }, [total, isValid, formData, includeCprSign]);
+  }, [total, isValid, formData, includeCprSign, showPayment]);
 
   // Handle Express Checkout submission
   const handleExpressPayment = async () => {
@@ -118,8 +118,29 @@ export default function CheckoutClient() {
       setError(null);
       setIsProcessing(true);
 
-      // Use existing clientSecret instead of creating a new one
-      return { clientSecret };
+      const response = await fetch('/.netlify/functions/create-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: total,
+          items: [
+            SERVICES.poolInspection,
+            ...(includeCprSign ? [SERVICES.cprSign] : [])
+          ],
+          includeCprSign,
+          customerDetails: formData,
+          isExpressCheckout: true,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process payment');
+      }
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+
+      return { clientSecret: data.clientSecret };
     } catch (err: any) {
       setError(err.message || 'Payment failed. Please try again.');
       throw err;
@@ -155,10 +176,10 @@ export default function CheckoutClient() {
                 </div>
                 <div className="hidden sm:block w-24 h-0.5 bg-gray-200"></div>
                 <div className="flex items-center">
-                  <div className="flex items-center justify-center w-8 h-8 bg-teal-600 rounded-full">
-                    <span className="text-white font-semibold">2</span>
+                  <div className={`flex items-center justify-center w-8 h-8 ${showPayment ? 'bg-teal-600' : 'bg-gray-200'} rounded-full`}>
+                    <span className={`${showPayment ? 'text-white' : 'text-gray-600'} font-semibold`}>2</span>
                   </div>
-                  <span className="ml-2 font-medium text-teal-600">Payment</span>
+                  <span className={`ml-2 font-medium ${showPayment ? 'text-teal-600' : 'text-gray-600'}`}>Payment</span>
                 </div>
                 <div className="hidden sm:block w-24 h-0.5 bg-gray-200"></div>
                 <div className="flex items-center">
@@ -231,251 +252,255 @@ export default function CheckoutClient() {
               </div>
             </div>
 
-            {/* Contact Form and Payment */}
-            <div className="bg-white rounded-lg shadow-lg p-6 space-y-8">
-              <form className="space-y-6">
-                <div className="border-b pb-4">
-                  <h2 className="text-xl font-semibold">Contact Information</h2>
-                  <p className="text-gray-500 text-sm mt-1">We'll use these details to contact you about your inspection</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                    <input
-                      {...register("firstName", { required: "First name is required" })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.firstName ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.firstName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
-                    )}
+            {/* Contact Form */}
+            {!showPayment && (
+              <div className="bg-white rounded-lg shadow-lg p-6 space-y-8">
+                <form className="space-y-6">
+                  <div className="border-b pb-4">
+                    <h2 className="text-xl font-semibold">Contact Information</h2>
+                    <p className="text-gray-500 text-sm mt-1">We'll use these details to contact you about your inspection</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                    <input
-                      {...register("lastName", { required: "Last name is required" })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.lastName ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.lastName && (
-                      <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
-                    )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                      <input
+                        {...register("firstName", { required: "First name is required" })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.firstName ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.firstName && (
+                        <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                      <input
+                        {...register("lastName", { required: "Last name is required" })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.lastName ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.lastName && (
+                        <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    {...register("email", {
-                      required: "Email is required",
-                      pattern: {
-                        value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                        message: "Invalid email address",
-                      },
-                    })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                      errors.email ? 'border-red-500' : ''
-                    }`}
-                  />
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    {...register("phone", {
-                      required: "Phone number is required",
-                      pattern: {
-                        value: /^(?:\+?61|0)[2-478](?:[ -]?[0-9]){8}$/,
-                        message: "Invalid Australian phone number",
-                      },
-                    })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                      errors.phone ? 'border-red-500' : ''
-                    }`}
-                  />
-                  {errors.phone && (
-                    <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                  <input
-                    {...register("address", { required: "Address is required" })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                      errors.address ? 'border-red-500' : ''
-                    }`}
-                  />
-                  {errors.address && (
-                    <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Suburb</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <input
-                      {...register("suburb", { required: "Suburb is required" })}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.suburb ? 'border-red-500' : ''
-                      }`}
-                    />
-                    {errors.suburb && (
-                      <p className="mt-1 text-sm text-red-600">{errors.suburb.message}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
-                    <input
-                      {...register("postcode", {
-                        required: "Postcode is required",
+                      type="email"
+                      {...register("email", {
+                        required: "Email is required",
                         pattern: {
-                          value: /^[0-9]{4}$/,
-                          message: "Invalid postcode",
+                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                          message: "Invalid email address",
                         },
                       })}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                        errors.postcode ? 'border-red-500' : ''
+                        errors.email ? 'border-red-500' : ''
                       }`}
                     />
-                    {errors.postcode && (
-                      <p className="mt-1 text-sm text-red-600">{errors.postcode.message}</p>
+                    {errors.email && (
+                      <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
                     )}
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
-                  <input
-                    type="date"
-                    {...register("preferredDate", { required: "Preferred date is required" })}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
-                      errors.preferredDate ? 'border-red-500' : ''
-                    }`}
-                  />
-                  {errors.preferredDate && (
-                    <p className="mt-1 text-sm text-red-600">{errors.preferredDate.message}</p>
-                  )}
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      {...register("phone", {
+                        required: "Phone number is required",
+                        pattern: {
+                          value: /^(?:\+?61|0)[2-478](?:[ -]?[0-9]){8}$/,
+                          message: "Invalid Australian phone number",
+                        },
+                      })}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                        errors.phone ? 'border-red-500' : ''
+                      }`}
+                    />
+                    {errors.phone && (
+                      <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
+                    )}
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
-                  <textarea
-                    {...register("notes")}
-                    rows={4}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                    <input
+                      {...register("address", { required: "Address is required" })}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                        errors.address ? 'border-red-500' : ''
+                      }`}
+                    />
+                    {errors.address && (
+                      <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>
+                    )}
+                  </div>
 
-                <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-                  <input
-                    type="checkbox"
-                    id="cprSign"
-                    checked={includeCprSign}
-                    onChange={(e) => setIncludeCprSign(e.target.checked)}
-                    className="h-5 w-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="cprSign" className="ml-3">
-                    <div className="text-sm font-medium text-gray-900">Add CPR Sign (+$30)</div>
-                    <p className="text-sm text-gray-500">Required by law for all pool owners</p>
-                  </label>
-                </div>
-
-                {/* Payment Section */}
-                {isValid && !showConfirmation && (
-                  <button
-                    type="button"
-                    onClick={handleReviewOrder}
-                    disabled={isLoading || !isValid}
-                    className={`w-full bg-teal-600 text-white py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
-                      (isLoading || !isValid) ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {isLoading ? 'Loading...' : 'Review Order'}
-                  </button>
-                )}
-
-                {showConfirmation && !showPayment && (
-                  <div className="border-t pt-6">
-                    <div className="bg-gray-50 p-6 rounded-lg mb-6">
-                      <h3 className="text-lg font-semibold mb-4">Order Confirmation</h3>
-                      <div className="space-y-3">
-                        <div className="flex justify-between">
-                          <span>Pool Safety Inspection</span>
-                          <span>${SERVICES.poolInspection.price}</span>
-                        </div>
-                        {includeCprSign && (
-                          <div className="flex justify-between text-teal-600">
-                            <span>CPR Sign</span>
-                            <span>${SERVICES.cprSign.price}</span>
-                          </div>
-                        )}
-                        <div className="border-t pt-3 flex justify-between font-semibold">
-                          <span>Final Total</span>
-                          <span>${total}</span>
-                        </div>
-                      </div>
-                      <div className="mt-6 flex space-x-4">
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmation(false)}
-                          disabled={isLoading}
-                          className={`flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors ${
-                            isLoading ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
-                        >
-                          Edit Order
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleProceedToPayment}
-                          disabled={isLoading}
-                          className={`flex-1 bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
-                            isLoading ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
-                        >
-                          {isLoading ? 'Loading...' : 'Proceed to Payment'}
-                        </button>
-                      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Suburb</label>
+                      <input
+                        {...register("suburb", { required: "Suburb is required" })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.suburb ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.suburb && (
+                        <p className="mt-1 text-sm text-red-600">{errors.suburb.message}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
+                      <input
+                        {...register("postcode", {
+                          required: "Postcode is required",
+                          pattern: {
+                            value: /^[0-9]{4}$/,
+                            message: "Invalid postcode",
+                          },
+                        })}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                          errors.postcode ? 'border-red-500' : ''
+                        }`}
+                      />
+                      {errors.postcode && (
+                        <p className="mt-1 text-sm text-red-600">{errors.postcode.message}</p>
+                      )}
                     </div>
                   </div>
-                )}
 
-                {showPayment && clientSecret ? (
-                  <div className="border-t pt-6">
-                    <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
-                    <div className="bg-blue-50 p-4 rounded-lg mb-6">
-                      <p className="text-sm text-blue-800">
-                        Total to be charged: <span className="font-semibold">${total}</span>
-                      </p>
-                    </div>
-                    <PaymentForm
-                      clientSecret={clientSecret}
-                      amount={total}
-                      onSubmit={handleExpressPayment}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Date</label>
+                    <input
+                      type="date"
+                      {...register("preferredDate", { required: "Preferred date is required" })}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 ${
+                        errors.preferredDate ? 'border-red-500' : ''
+                      }`}
+                    />
+                    {errors.preferredDate && (
+                      <p className="mt-1 text-sm text-red-600">{errors.preferredDate.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
+                    <textarea
+                      {...register("notes")}
+                      rows={4}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                     />
                   </div>
-                ) : showPayment ? (
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-700">
-                      Loading payment options...
-                    </p>
+
+                  <div className="flex items-center p-4 bg-gray-50 rounded-lg">
+                    <input
+                      type="checkbox"
+                      id="cprSign"
+                      checked={includeCprSign}
+                      onChange={(e) => setIncludeCprSign(e.target.checked)}
+                      className="h-5 w-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="cprSign" className="ml-3">
+                      <div className="text-sm font-medium text-gray-900">Add CPR Sign (+$30)</div>
+                      <p className="text-sm text-gray-500">Required by law for all pool owners</p>
+                    </label>
                   </div>
-                ) : !showConfirmation && !isValid && (
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-700">
-                      Please fill in all required fields to proceed.
-                    </p>
+
+                  {/* Review Order Button */}
+                  {isValid && !showConfirmation && (
+                    <button
+                      type="button"
+                      onClick={handleReviewOrder}
+                      disabled={isLoading || !isValid}
+                      className={`w-full bg-teal-600 text-white py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
+                        (isLoading || !isValid) ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {isLoading ? 'Loading...' : 'Review Order'}
+                    </button>
+                  )}
+
+                  {/* Order Confirmation */}
+                  {showConfirmation && (
+                    <div className="border-t pt-6">
+                      <div className="bg-gray-50 p-6 rounded-lg mb-6">
+                        <h3 className="text-lg font-semibold mb-4">Order Confirmation</h3>
+                        <div className="space-y-3">
+                          <div className="flex justify-between">
+                            <span>Pool Safety Inspection</span>
+                            <span>${SERVICES.poolInspection.price}</span>
+                          </div>
+                          {includeCprSign && (
+                            <div className="flex justify-between text-teal-600">
+                              <span>CPR Sign</span>
+                              <span>${SERVICES.cprSign.price}</span>
+                            </div>
+                          )}
+                          <div className="border-t pt-3 flex justify-between font-semibold">
+                            <span>Final Total</span>
+                            <span>${total}</span>
+                          </div>
+                        </div>
+                        <div className="mt-6 flex space-x-4">
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmation(false)}
+                            disabled={isLoading}
+                            className={`flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors ${
+                              isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          >
+                            Edit Order
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleProceedToPayment}
+                            disabled={isLoading}
+                            className={`flex-1 bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
+                              isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          >
+                            {isLoading ? 'Loading...' : 'Proceed to Payment'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </form>
+              </div>
+            )}
+
+            {/* Payment Section */}
+            {showPayment && (
+              <div className="bg-white rounded-lg shadow-lg p-6 space-y-8">
+                <div className="border-b pb-4">
+                  <h2 className="text-xl font-semibold">Payment Details</h2>
+                  <p className="text-gray-500 text-sm mt-1">Complete your booking with a secure payment</p>
+                </div>
+
+                <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-800">Total to be charged</p>
+                      <p className="text-2xl font-bold text-blue-900">${total}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPayment(false);
+                        setShowConfirmation(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Edit Order
+                    </button>
                   </div>
-                )}
+                </div>
 
                 {error && (
                   <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-700 rounded-lg">
@@ -491,8 +516,22 @@ export default function CheckoutClient() {
                     </div>
                   </div>
                 )}
-              </form>
-            </div>
+
+                {clientSecret ? (
+                  <PaymentForm
+                    clientSecret={clientSecret}
+                    amount={total}
+                    onSubmit={handleExpressPayment}
+                  />
+                ) : (
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      Loading payment options...
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
