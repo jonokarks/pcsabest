@@ -9,7 +9,7 @@ import {
   Elements as StripeElements,
   PaymentRequestButtonElement,
 } from "@stripe/react-stripe-js";
-import type { Appearance, PaymentRequest, PaymentRequestPaymentMethodEvent, Stripe } from '@stripe/stripe-js';
+import type { Appearance, PaymentRequest, PaymentRequestPaymentMethodEvent } from '@stripe/stripe-js';
 import { useRouter } from "next/navigation";
 import Image from 'next/image';
 
@@ -51,107 +51,84 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   const elements = useElements();
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
-  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [canMakePayment, setCanMakePayment] = useState(false);
+  const [showButton, setShowButton] = useState(false);
+  const prRef = useRef<PaymentRequest | null>(null);
   const mountedRef = useRef(true);
 
-  // Create payment request instance
-  const createPaymentRequest = useCallback(async (currentAmount: number, stripeInstance: Stripe) => {
-    if (!stripeInstance) return null;
-    
-    try {
-      // Validate amount
-      const validAmount = Math.round(currentAmount * 100) / 100;
-      console.log('Creating payment request with amount:', validAmount);
-      
-      const pr = stripeInstance.paymentRequest({
-        country: 'AU',
-        currency: 'aud',
-        total: {
-          label: validAmount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-          amount: Math.round(validAmount * 100), // Ensure integer amount in cents
-        },
-        requestShipping: false,
-        requestPayerName: true,
-        requestPayerEmail: true,
-        disableWallets: ['link'],
-      });
-      
-      // Check if payment can be made before proceeding
-      const result = await pr.canMakePayment();
-      if (!mountedRef.current) return null;
-      
-      if (!result) {
-        console.log('Payment request cannot make payment');
-        setCanMakePayment(false);
-        return null;
+  // Update payment request amount
+  const updatePaymentRequestAmount = useCallback((pr: PaymentRequest, currentAmount: number) => {
+    const validAmount = Math.round(currentAmount * 100) / 100;
+    pr.update({
+      total: {
+        label: validAmount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+        amount: Math.round(validAmount * 100),
       }
-      
-      console.log('Payment request can make payment');
-      setCanMakePayment(true);
-      
-      // Add payment method handler
-      pr.on('paymentmethod', async (event: PaymentRequestPaymentMethodEvent) => {
-        try {
-          setError(null);
-          const { clientSecret: newClientSecret } = await onSubmit({
-            name: event.payerName || '',
-            email: event.payerEmail || '',
-            paymentMethod: event.paymentMethod.type,
-          });
+    });
+  }, []);
 
-          if (!stripeInstance) return;
-
-          const { error: confirmError } = await stripeInstance.confirmCardPayment(
-            newClientSecret || clientSecret,
-            {
-              payment_method: event.paymentMethod.id,
-              receipt_email: event.payerEmail,
-            }
-          );
-
-          if (confirmError) {
-            event.complete('fail');
-            throw new Error(confirmError.message);
-          }
-
-          event.complete('success');
-          router.push("/checkout/success");
-        } catch (error: any) {
-          setError(error.message || 'Payment failed. Please try again.');
-          event.complete('fail');
-        }
-      });
-
-      return pr;
-    } catch (error: any) {
-      console.error('Error creating payment request:', error);
-      setError('Failed to initialize payment method. Please try again.');
-      return null;
-    }
-  }, [onSubmit, clientSecret, router]);
-
-  // Initialize and update payment request when amount changes
+  // Initialize payment request
   useEffect(() => {
-    if (!stripe || !elements) return;
-
-    let mounted = true;
+    if (!stripe || !elements || !mountedRef.current) return;
 
     const initializePaymentRequest = async () => {
       try {
-        // Clean up existing payment request
-        if (paymentRequest) {
-          paymentRequest.off('paymentmethod');
-          setPaymentRequest(null);
-          setCanMakePayment(false);
+        if (!prRef.current) {
+          const pr = stripe.paymentRequest({
+            country: 'AU',
+            currency: 'aud',
+            total: {
+              label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+              amount: Math.round(amount * 100),
+            },
+            requestShipping: false,
+            requestPayerName: true,
+            requestPayerEmail: true,
+            disableWallets: ['link'],
+          });
+
+          const result = await pr.canMakePayment();
+          if (!mountedRef.current) return;
+
+          if (result) {
+            pr.on('paymentmethod', async (event: PaymentRequestPaymentMethodEvent) => {
+              try {
+                setError(null);
+                const { clientSecret: newClientSecret } = await onSubmit({
+                  name: event.payerName || '',
+                  email: event.payerEmail || '',
+                  paymentMethod: event.paymentMethod.type,
+                });
+
+                if (!stripe) return;
+
+                const { error: confirmError } = await stripe.confirmCardPayment(
+                  newClientSecret || clientSecret,
+                  {
+                    payment_method: event.paymentMethod.id,
+                    receipt_email: event.payerEmail,
+                  }
+                );
+
+                if (confirmError) {
+                  event.complete('fail');
+                  throw new Error(confirmError.message);
+                }
+
+                event.complete('success');
+                router.push("/checkout/success");
+              } catch (error: any) {
+                setError(error.message || 'Payment failed. Please try again.');
+                event.complete('fail');
+              }
+            });
+
+            prRef.current = pr;
+            setShowButton(true);
+          }
+        } else {
+          updatePaymentRequestAmount(prRef.current, amount);
         }
-
-        // Create new payment request
-        const pr = await createPaymentRequest(amount, stripe);
-        if (!mounted || !pr) return;
-
-        setPaymentRequest(pr);
       } catch (error: any) {
         console.error('Error initializing payment request:', error);
         setError('Error initializing payment. Please try again.');
@@ -161,24 +138,23 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     initializePaymentRequest();
 
     return () => {
-      mounted = false;
-      if (paymentRequest) {
-        paymentRequest.off('paymentmethod');
+      if (prRef.current) {
+        prRef.current.off('paymentmethod');
       }
     };
-  }, [stripe, elements, createPaymentRequest, amount, paymentRequest]);
+  }, [stripe, elements, amount, onSubmit, clientSecret, router, updatePaymentRequestAmount]);
 
   // Cleanup on unmount
   useEffect(() => {
     mountedRef.current = true;
-    
     return () => {
       mountedRef.current = false;
-      if (paymentRequest) {
-        paymentRequest.off('paymentmethod');
+      if (prRef.current) {
+        prRef.current.off('paymentmethod');
+        prRef.current = null;
       }
     };
-  }, [paymentRequest]);
+  }, []);
 
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -258,11 +234,11 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         </div>
       </div>
 
-      {paymentRequest && canMakePayment && (
+      {showButton && prRef.current && (
         <div className="mb-4">
           <PaymentRequestButtonElement
             options={{
-              paymentRequest,
+              paymentRequest: prRef.current,
               style: {
                 paymentRequestButton: {
                   type: 'buy',
