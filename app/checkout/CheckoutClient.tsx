@@ -112,35 +112,12 @@ export default function CheckoutClient() {
 
   // Handle Express Checkout submission
   const handleExpressPayment = async () => {
-    if (isProcessing) return { clientSecret };
+    if (isProcessing || !clientSecret) return { clientSecret };
 
     try {
       setError(null);
       setIsProcessing(true);
-
-      const response = await fetch('/.netlify/functions/create-payment-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: total,
-          items: [
-            SERVICES.poolInspection,
-            ...(includeCprSign ? [SERVICES.cprSign] : [])
-          ],
-          includeCprSign,
-          customerDetails: formData,
-          isExpressCheckout: true,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process payment');
-      }
-
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
-
-      return { clientSecret: data.clientSecret };
+      return { clientSecret };
     } catch (err: any) {
       setError(err.message || 'Payment failed. Please try again.');
       throw err;

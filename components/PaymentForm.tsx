@@ -54,22 +54,38 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
 
     // Handle Express Checkout payment
     pr.on('paymentmethod', async (event) => {
+      if (isProcessing) {
+        event.complete('fail');
+        return;
+      }
+
       try {
         setError(null);
         setIsProcessing(true);
 
-        const { clientSecret: newClientSecret } = await onSubmit();
+        // Get the payment intent client secret
+        const { clientSecret: confirmedSecret } = await onSubmit();
 
+        // Confirm the payment
         const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
-          newClientSecret || clientSecret,
+          confirmedSecret,
           {
             payment_method: event.paymentMethod.id,
             receipt_email: event.payerEmail,
-          }
+          },
+          { handleActions: false } // Let us handle next actions
         );
 
         if (confirmError) {
           throw new Error(confirmError.message);
+        }
+
+        // Handle next actions if needed
+        if (paymentIntent.status === 'requires_action') {
+          const { error: actionError } = await stripe.confirmCardPayment(confirmedSecret);
+          if (actionError) {
+            throw new Error(actionError.message);
+          }
         }
 
         if (paymentIntent.status === 'succeeded') {
@@ -107,7 +123,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!stripe || !elements) {
+    if (!stripe || !elements || isProcessing) {
       return;
     }
 
@@ -115,13 +131,19 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
       setError(null);
       setIsProcessing(true);
 
+      // Submit the form first
       const { error: submitError } = await elements.submit();
       if (submitError) {
         throw new Error(submitError.message);
       }
 
+      // Get the payment intent client secret
+      const { clientSecret: confirmedSecret } = await onSubmit();
+
+      // Confirm the payment
       const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
         elements,
+        clientSecret: confirmedSecret,
         confirmParams: {
           return_url: window.location.origin + "/checkout/success",
         },
