@@ -127,6 +127,43 @@ export default function CheckoutClient() {
     );
   }, [total, includeCprSign, formData, formValid, paymentIntentId, updatePaymentIntent]);
 
+  const createOrUpdatePaymentIntent = useCallback(async (
+    amount: number,
+    items: any[],
+    includeCprSign: boolean,
+    customerDetails: any,
+    isExpressCheckout: boolean = false,
+    existingPaymentIntentId: string | null = null
+  ) => {
+    const response = await fetch('/.netlify/functions/create-payment-intent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount,
+        items,
+        includeCprSign,
+        customerDetails,
+        isExpressCheckout,
+        paymentIntentId: existingPaymentIntentId,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to create/update payment intent:', response.status, response.statusText);
+      throw new Error('Failed to process payment');
+    }
+
+    const result = await response.json();
+    if (result.error) {
+      console.error('Payment intent error:', result.error);
+      throw new Error(result.error);
+    }
+
+    return result;
+  }, []);
+
   const handleExpressPayment = async (data: { name?: string; email?: string; paymentMethod?: string }) => {
     if (!formValid || !formData) {
       throw new Error('Please fill in all required fields before proceeding with payment');
@@ -141,39 +178,17 @@ export default function CheckoutClient() {
         ...(includeCprSign ? [cprSignService] : [])
       ];
 
-      // Create a new payment intent for express checkout
-      const response = await fetch('/.netlify/functions/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: total, // Use the same total from state
-          items,
-          includeCprSign,
-          customerDetails: {
-            ...formData,
-            ...data,
-          },
-          isExpressCheckout: true,
-          paymentIntentId: null,
-        }),
-      });
+      const currentTotal = basePrice + (includeCprSign ? cprSignPrice : 0);
+      console.log('Processing express payment with total:', currentTotal);
 
-      if (!response.ok) {
-        console.error('Failed to create payment intent:', response.status, response.statusText);
-        throw new Error('Failed to create payment intent');
-      }
+      const result = await createOrUpdatePaymentIntent(
+        currentTotal,
+        items,
+        includeCprSign,
+        { ...formData, ...data },
+        true
+      );
 
-      const result = await response.json();
-      console.log('Payment intent created:', result);
-      
-      if (result.error) {
-        console.error('Payment intent error:', result.error);
-        throw new Error(result.error);
-      }
-
-      // Return the new client secret
       return { clientSecret: result.clientSecret };
     } catch (error: any) {
       setError(error.message || 'Error processing your payment. Please try again.');
@@ -193,29 +208,21 @@ export default function CheckoutClient() {
         ...(includeCprSign ? [cprSignService] : [])
       ];
 
-      const response = await fetch('/.netlify/functions/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          amount: total,
-          items,
-          includeCprSign,
-          customerDetails: data,
-          paymentIntentId,
-        }),
-      });
+      const currentTotal = basePrice + (includeCprSign ? cprSignPrice : 0);
+      console.log('Processing standard payment with total:', currentTotal);
 
-      if (!response.ok) {
-        throw new Error('Failed to update payment intent');
-      }
+      const { clientSecret: newClientSecret, paymentIntentId: newPaymentIntentId } = await createOrUpdatePaymentIntent(
+        currentTotal,
+        items,
+        includeCprSign,
+        data,
+        false,
+        paymentIntentId
+      );
 
-      const result = await response.json();
-      
-      if (result.error) {
-        throw new Error(result.error);
-      }
+      // Update state with new values
+      setClientSecret(newClientSecret);
+      setPaymentIntentId(newPaymentIntentId);
 
       if (!window.confirmStripePayment) {
         throw new Error('Payment form not initialized');
