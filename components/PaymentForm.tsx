@@ -42,7 +42,10 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
       },
       requestPayerName: true,
       requestPayerEmail: true,
+      requestPayerPhone: true,
       disableWallets: ['link'],
+      // Enable both Apple Pay and Google Pay
+      wallets: ['applePay', 'googlePay']
     });
 
     // Check device compatibility
@@ -205,6 +208,9 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
 
       {paymentRequest && (
         <div className="mb-6">
+          <div className="mb-4 text-sm font-medium text-gray-700">
+            Express Checkout
+          </div>
           <PaymentRequestButtonElement
             options={{
               paymentRequest,
@@ -212,13 +218,18 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
                 paymentRequestButton: {
                   type: 'buy',
                   theme: 'dark',
-                  height: '44px',
+                  height: '48px',
                 },
               },
             }}
           />
-          <div className="mt-4 text-center text-sm text-gray-500">
-            Or pay with card below
+          <div className="relative mt-6 mb-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500">Or pay with card</span>
+            </div>
           </div>
         </div>
       )}
@@ -260,6 +271,10 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
             billingDetails: {
               name: '',
             }
+          },
+          wallets: {
+            applePay: 'auto',
+            googlePay: 'auto'
           }
         }}
       />

@@ -37,8 +37,8 @@ export default function CheckoutClient() {
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string>("");
   const [total, setTotal] = useState<number>(SERVICES.poolInspection.price);
-  const [showConfirmation, setShowConfirmation] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const {
     register,
@@ -96,11 +96,6 @@ export default function CheckoutClient() {
   const handleCprSignChange = (checked: boolean) => {
     setIncludeCprSign(checked);
     updateTotal(checked);
-  };
-
-  const handleReviewOrder = () => {
-    if (isLoading || !isValid) return;
-    setShowConfirmation(true);
   };
 
   const handleProceedToPayment = async () => {
@@ -382,61 +377,112 @@ export default function CheckoutClient() {
                   </div>
 
                   {/* Review Order Button */}
-                  {isValid && !showConfirmation && (
+                  {isValid && (
                     <button
                       type="button"
-                      onClick={handleReviewOrder}
+                      onClick={() => setIsModalOpen(true)}
                       disabled={isLoading || !isValid}
                       className={`w-full bg-teal-600 text-white py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
                         (isLoading || !isValid) ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     >
-                      {isLoading ? 'Loading...' : 'Review Order'}
+                      {isLoading ? 'Loading...' : 'Proceed to Payment'}
                     </button>
                   )}
 
-                  {/* Order Confirmation */}
-                  {showConfirmation && (
-                    <div className="border-t pt-6">
-                      <div className="bg-gray-50 p-6 rounded-lg mb-6">
-                        <h3 className="text-lg font-semibold mb-4">Order Confirmation</h3>
-                        <div className="space-y-3">
-                          <div className="flex justify-between">
-                            <span>Pool Safety Inspection</span>
-                            <span>${SERVICES.poolInspection.price}</span>
+                  {/* Order Review Modal */}
+                  {isModalOpen && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 space-y-6">
+                          <div className="flex justify-between items-center border-b pb-4">
+                            <h3 className="text-xl font-semibold">Review Your Order</h3>
+                            <button
+                              onClick={() => setIsModalOpen(false)}
+                              className="text-gray-400 hover:text-gray-500"
+                            >
+                              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
                           </div>
-                          {includeCprSign && (
-                            <div className="flex justify-between text-teal-600">
-                              <span>CPR Sign</span>
-                              <span>${SERVICES.cprSign.price}</span>
+
+                          {/* Customer Details */}
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <h4 className="font-medium mb-3">Customer Details</h4>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <p className="text-gray-600">Name</p>
+                                <p className="font-medium">{formData.firstName} {formData.lastName}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Email</p>
+                                <p className="font-medium">{formData.email}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Phone</p>
+                                <p className="font-medium">{formData.phone}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-600">Preferred Date</p>
+                                <p className="font-medium">{formData.preferredDate}</p>
+                              </div>
+                              <div className="col-span-2">
+                                <p className="text-gray-600">Address</p>
+                                <p className="font-medium">
+                                  {formData.address}, {formData.suburb} {formData.postcode}
+                                </p>
+                              </div>
                             </div>
-                          )}
-                          <div className="border-t pt-3 flex justify-between font-semibold">
-                            <span>Final Total</span>
-                            <span>${total}</span>
                           </div>
-                        </div>
-                        <div className="mt-6 flex space-x-4">
-                          <button
-                            type="button"
-                            onClick={() => setShowConfirmation(false)}
-                            disabled={isLoading}
-                            className={`flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors ${
-                              isLoading ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                          >
-                            Edit Order
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleProceedToPayment}
-                            disabled={isLoading}
-                            className={`flex-1 bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
-                              isLoading ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                          >
-                            {isLoading ? 'Loading...' : 'Proceed to Payment'}
-                          </button>
+
+                          {/* Order Summary */}
+                          <div>
+                            <h4 className="font-medium mb-3">Order Summary</h4>
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <p className="font-medium">{SERVICES.poolInspection.name}</p>
+                                  <p className="text-sm text-gray-600">{SERVICES.poolInspection.description}</p>
+                                </div>
+                                <span className="font-medium">${SERVICES.poolInspection.price}</span>
+                              </div>
+                              {includeCprSign && (
+                                <div className="flex justify-between items-center text-teal-600">
+                                  <div>
+                                    <p className="font-medium">{SERVICES.cprSign.name}</p>
+                                    <p className="text-sm text-gray-600">{SERVICES.cprSign.description}</p>
+                                  </div>
+                                  <span className="font-medium">${SERVICES.cprSign.price}</span>
+                                </div>
+                              )}
+                              <div className="border-t pt-3 flex justify-between items-center font-semibold text-lg">
+                                <span>Total Amount</span>
+                                <span>${total}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex space-x-4 pt-4 border-t">
+                            <button
+                              type="button"
+                              onClick={() => setIsModalOpen(false)}
+                              className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                            >
+                              Edit Details
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsModalOpen(false);
+                                handleProceedToPayment();
+                              }}
+                              disabled={isLoading}
+                              className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
+                            >
+                              {isLoading ? 'Processing...' : 'Confirm & Pay'}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -463,7 +509,7 @@ export default function CheckoutClient() {
                       type="button"
                       onClick={() => {
                         setShowPayment(false);
-                        setShowConfirmation(true);
+                        setIsModalOpen(true);
                       }}
                       className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                     >
