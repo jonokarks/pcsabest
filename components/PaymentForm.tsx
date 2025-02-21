@@ -80,7 +80,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
           throw new Error(confirmError.message);
         }
 
-        // Handle next actions if needed
+        // Handle next actions if needed (like 3D Secure)
         if (paymentIntent.status === 'requires_action') {
           const { error: actionError } = await stripe.confirmCardPayment(confirmedSecret);
           if (actionError) {
@@ -105,7 +105,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
     return () => {
       pr.off('paymentmethod');
     };
-  }, [stripe, elements, amount, onSubmit, clientSecret, router]);
+  }, [stripe, elements, amount, onSubmit, clientSecret, router, isProcessing]);
 
   // Update Express Checkout amount
   useEffect(() => {
@@ -156,6 +156,18 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
 
       if (paymentIntent.status === 'succeeded') {
         router.push("/checkout/success");
+      } else if (paymentIntent.status === 'requires_action') {
+        // Let Stripe handle 3D Secure
+        const { error: actionError } = await stripe.confirmPayment({
+          elements,
+          clientSecret: confirmedSecret,
+          confirmParams: {
+            return_url: window.location.origin + "/checkout/success",
+          },
+        });
+        if (actionError) {
+          throw new Error(actionError.message);
+        }
       } else {
         throw new Error('Payment failed');
       }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import PaymentForm from "../../components/PaymentForm";
 
@@ -33,7 +33,6 @@ interface FormData {
 
 export default function CheckoutClient() {
   const [isLoading, setIsLoading] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [includeCprSign, setIncludeCprSign] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string>("");
@@ -53,77 +52,50 @@ export default function CheckoutClient() {
   const formData = watch();
 
   // Calculate total when CPR sign option changes
-  useEffect(() => {
-    const newTotal = SERVICES.poolInspection.price + (includeCprSign ? SERVICES.cprSign.price : 0);
+  const updateTotal = (includeCpr: boolean) => {
+    const newTotal = SERVICES.poolInspection.price + (includeCpr ? SERVICES.cprSign.price : 0);
     setTotal(newTotal);
-  }, [includeCprSign]);
+  };
 
-  // Create or update payment intent when form is valid and total changes
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    let loadingTimeoutId: NodeJS.Timeout;
-
-    const updatePaymentIntent = async () => {
-      if (!isValid || !showPayment) return;
-
-      try {
-        // Debounce loading state to prevent quick flashes
-        loadingTimeoutId = setTimeout(() => setIsLoading(true), 500);
-        setError(null);
-
-        const response = await fetch('/.netlify/functions/create-payment-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: total,
-            items: [
-              SERVICES.poolInspection,
-              ...(includeCprSign ? [SERVICES.cprSign] : [])
-            ],
-            includeCprSign,
-            customerDetails: formData,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to initialize payment');
-        }
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
-        
-        setClientSecret(data.clientSecret);
-      } catch (err: any) {
-        setError(err.message || 'An error occurred. Please try again.');
-        setClientSecret("");
-      } finally {
-        clearTimeout(loadingTimeoutId);
-        setIsLoading(false);
-      }
-    };
-
-    // Debounce updates
-    timeoutId = setTimeout(updatePaymentIntent, 300);
-    return () => {
-      clearTimeout(timeoutId);
-      clearTimeout(loadingTimeoutId);
-    };
-  }, [total, isValid, formData, includeCprSign, showPayment]);
-
-  // Handle Express Checkout submission
-  const handleExpressPayment = async () => {
-    if (isProcessing || !clientSecret) return { clientSecret };
-
+  // Create payment intent
+  const createPaymentIntent = async () => {
     try {
+      setIsLoading(true);
       setError(null);
-      setIsProcessing(true);
-      return { clientSecret };
+
+      const response = await fetch('/.netlify/functions/create-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: total,
+          items: [
+            SERVICES.poolInspection,
+            ...(includeCprSign ? [SERVICES.cprSign] : [])
+          ],
+          includeCprSign,
+          customerDetails: formData,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to initialize payment');
+      }
+
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+      
+      return data.clientSecret;
     } catch (err: any) {
-      setError(err.message || 'Payment failed. Please try again.');
+      setError(err.message || 'An error occurred. Please try again.');
       throw err;
     } finally {
-      setIsProcessing(false);
+      setIsLoading(false);
     }
+  };
+
+  const handleCprSignChange = (checked: boolean) => {
+    setIncludeCprSign(checked);
+    updateTotal(checked);
   };
 
   const handleReviewOrder = () => {
@@ -131,9 +103,30 @@ export default function CheckoutClient() {
     setShowConfirmation(true);
   };
 
-  const handleProceedToPayment = () => {
-    if (isLoading) return;
-    setShowPayment(true);
+  const handleProceedToPayment = async () => {
+    if (isLoading || !isValid) return;
+    
+    try {
+      const secret = await createPaymentIntent();
+      setClientSecret(secret);
+      setShowPayment(true);
+    } catch (err) {
+      // Error already handled in createPaymentIntent
+      setShowPayment(false);
+    }
+  };
+
+  // Handle payment submission (both Express and Standard)
+  const handlePaymentSubmission = async () => {
+    if (!clientSecret) return { clientSecret };
+
+    try {
+      setError(null);
+      return { clientSecret };
+    } catch (err: any) {
+      setError(err.message || 'Payment failed. Please try again.');
+      throw err;
+    }
   };
 
   return (
@@ -379,7 +372,7 @@ export default function CheckoutClient() {
                       type="checkbox"
                       id="cprSign"
                       checked={includeCprSign}
-                      onChange={(e) => setIncludeCprSign(e.target.checked)}
+                      onChange={(e) => handleCprSignChange(e.target.checked)}
                       className="h-5 w-5 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
                     />
                     <label htmlFor="cprSign" className="ml-3">
@@ -498,7 +491,7 @@ export default function CheckoutClient() {
                   <PaymentForm
                     clientSecret={clientSecret}
                     amount={total}
-                    onSubmit={handleExpressPayment}
+                    onSubmit={handlePaymentSubmission}
                   />
                 ) : (
                   <div className="p-4 bg-blue-50 rounded-lg">
