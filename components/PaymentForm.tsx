@@ -187,7 +187,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
           <Image
-            src="/images/powered-by-stripe.svg"
+            src="/images/stripe-badge.png"
             alt="Powered by Stripe"
             width={120}
             height={32}
