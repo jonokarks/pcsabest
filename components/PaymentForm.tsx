@@ -53,19 +53,14 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isPaymentRequestVisible, setIsPaymentRequestVisible] = useState(false);
   const [canMakePayment, setCanMakePayment] = useState(false);
-  const prRef = useRef<PaymentRequest | null>(null);
   const mountedRef = useRef(true);
-  const initializingRef = useRef(false);
 
   // Create payment request instance
   const createPaymentRequest = useCallback(async (currentAmount: number, stripeInstance: Stripe) => {
-    if (!stripeInstance || initializingRef.current) return null;
+    if (!stripeInstance) return null;
     
     try {
-      initializingRef.current = true;
-      
       // Validate amount
       const validAmount = Math.round(currentAmount * 100) / 100;
       console.log('Creating payment request with amount:', validAmount);
@@ -134,8 +129,6 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       console.error('Error creating payment request:', error);
       setError('Failed to initialize payment method. Please try again.');
       return null;
-    } finally {
-      initializingRef.current = false;
     }
   }, [onSubmit, clientSecret, router]);
 
@@ -144,64 +137,36 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     if (!stripe || !elements) return;
 
     let mounted = true;
-    let buttonTimeoutId: NodeJS.Timeout;
-    let initTimeoutId: NodeJS.Timeout;
 
     const initializePaymentRequest = async () => {
       try {
-        // Hide button during update
-        setIsPaymentRequestVisible(false);
-
         // Clean up existing payment request
-        if (prRef.current) {
-          console.log('Cleaning up existing payment request...');
-          prRef.current.off('paymentmethod');
-          prRef.current = null;
+        if (paymentRequest) {
+          paymentRequest.off('paymentmethod');
           setPaymentRequest(null);
+          setCanMakePayment(false);
         }
-
-        // Small delay to ensure cleanup is complete
-        await new Promise(resolve => setTimeout(resolve, 50));
-        if (!mounted) return;
 
         // Create new payment request
         const pr = await createPaymentRequest(amount, stripe);
-        if (!mounted) return;
+        if (!mounted || !pr) return;
 
-        if (pr) {
-          console.log('Setting up new payment request...');
-          prRef.current = pr;
-          setPaymentRequest(pr);
-
-          // Show button after a small delay
-          buttonTimeoutId = setTimeout(() => {
-            if (mounted && canMakePayment) {
-              setIsPaymentRequestVisible(true);
-              console.log('Payment request button visible');
-            }
-          }, 50);
-        }
+        setPaymentRequest(pr);
       } catch (error: any) {
         console.error('Error initializing payment request:', error);
         setError('Error initializing payment. Please try again.');
-      } finally {
-        initializingRef.current = false;
       }
     };
 
-    // Debounce initialization
-    initTimeoutId = setTimeout(initializePaymentRequest, 100);
+    initializePaymentRequest();
 
     return () => {
       mounted = false;
-      clearTimeout(buttonTimeoutId);
-      clearTimeout(initTimeoutId);
-      if (prRef.current) {
-        prRef.current.off('paymentmethod');
-        prRef.current = null;
+      if (paymentRequest) {
+        paymentRequest.off('paymentmethod');
       }
     };
-  }, [stripe, elements, createPaymentRequest, amount, canMakePayment]);
+  }, [stripe, elements, createPaymentRequest, amount, paymentRequest]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -209,12 +174,11 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     
     return () => {
       mountedRef.current = false;
-      if (prRef.current) {
-        prRef.current.off('paymentmethod');
-        prRef.current = null;
+      if (paymentRequest) {
+        paymentRequest.off('paymentmethod');
       }
     };
-  }, []);
+  }, [paymentRequest]);
 
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -294,7 +258,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         </div>
       </div>
 
-      {paymentRequest && isPaymentRequestVisible && (
+      {paymentRequest && canMakePayment && (
         <div className="mb-4">
           <PaymentRequestButtonElement
             options={{
