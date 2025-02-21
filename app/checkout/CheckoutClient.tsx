@@ -132,26 +132,36 @@ export default function CheckoutClient() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold">Secure Checkout</h1>
             <div className="mt-4">
-              <div className="flex items-center justify-between max-w-2xl">
-                <div className="flex items-center">
-                  <div className="flex items-center justify-center w-8 h-8 bg-teal-600 rounded-full">
-                    <span className="text-white font-semibold">1</span>
+              {/* Mobile Progress Bar */}
+              <div className="sm:hidden w-full bg-gray-200 h-1 rounded-full mt-4">
+                <div 
+                  className="bg-teal-600 h-1 rounded-full transition-all duration-300"
+                  style={{ width: showPayment ? '66.66%' : '33.33%' }}
+                ></div>
+              </div>
+
+              {/* Desktop Steps */}
+              <div className="hidden sm:block relative">
+                <div className="absolute top-1/2 left-0 w-full h-0.5 bg-gray-200 -translate-y-1/2"></div>
+                <div className="relative flex justify-between items-center">
+                  <div className="flex items-center">
+                    <div className="flex items-center justify-center w-8 h-8 bg-teal-600 rounded-full relative z-10">
+                      <span className="text-white font-semibold">1</span>
+                    </div>
+                    <span className="ml-2 font-medium text-teal-600">Your Details</span>
                   </div>
-                  <span className="ml-2 font-medium text-teal-600">Your Details</span>
-                </div>
-                <div className="hidden sm:block w-24 h-0.5 bg-gray-200"></div>
-                <div className="flex items-center">
-                  <div className={`flex items-center justify-center w-8 h-8 ${showPayment ? 'bg-teal-600' : 'bg-gray-200'} rounded-full`}>
-                    <span className={`${showPayment ? 'text-white' : 'text-gray-600'} font-semibold`}>2</span>
+                  <div className="flex items-center">
+                    <div className={`flex items-center justify-center w-8 h-8 ${showPayment ? 'bg-teal-600' : 'bg-gray-200'} rounded-full relative z-10`}>
+                      <span className={`${showPayment ? 'text-white' : 'text-gray-600'} font-semibold`}>2</span>
+                    </div>
+                    <span className={`ml-2 font-medium ${showPayment ? 'text-teal-600' : 'text-gray-600'}`}>Payment</span>
                   </div>
-                  <span className={`ml-2 font-medium ${showPayment ? 'text-teal-600' : 'text-gray-600'}`}>Payment</span>
-                </div>
-                <div className="hidden sm:block w-24 h-0.5 bg-gray-200"></div>
-                <div className="flex items-center">
-                  <div className="flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full">
-                    <span className="text-gray-600 font-semibold">3</span>
+                  <div className="flex items-center">
+                    <div className="flex items-center justify-center w-8 h-8 bg-gray-200 rounded-full relative z-10">
+                      <span className="text-gray-600 font-semibold">3</span>
+                    </div>
+                    <span className="ml-2 font-medium text-gray-600">Confirmation</span>
                   </div>
-                  <span className="ml-2 font-medium text-gray-600">Confirmation</span>
                 </div>
               </div>
             </div>
@@ -351,6 +361,9 @@ export default function CheckoutClient() {
                     {errors.preferredDate && (
                       <p className="mt-1 text-sm text-red-600">{errors.preferredDate.message}</p>
                     )}
+                    <p className="mt-2 text-sm text-gray-600 italic">
+                      While we will try our best to accommodate your preferred date, please note that the actual inspection date may need to be adjusted due to time constraints, logistical considerations, and peak demand periods.
+                    </p>
                   </div>
 
                   <div>

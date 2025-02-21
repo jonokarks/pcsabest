@@ -73,7 +73,9 @@ export default function ContactPage() {
                     </svg>
                     <div>
                       <h3 className="font-semibold text-gray-900">Phone</h3>
-                      <p className="text-gray-600">0400 000 000</p>
+                      <p className="text-gray-600">
+                        <a href="tel:0884729572" className="hover:text-teal-600 transition-colors">(08) 8472 9527</a>
+                      </p>
                     </div>
                   </div>
 
@@ -93,7 +95,9 @@ export default function ContactPage() {
                     </svg>
                     <div>
                       <h3 className="font-semibold text-gray-900">Email</h3>
-                      <p className="text-gray-600">info@poolcompliancesa.com.au</p>
+                      <p className="text-gray-600">
+                        <a href="mailto:info@poolcompliancesa.com.au" className="hover:text-teal-600 transition-colors">info@poolcompliancesa.com.au</a>
+                      </p>
                     </div>
                   </div>
 
@@ -132,14 +136,14 @@ export default function ContactPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Monday - Friday</span>
-                    <span className="text-gray-900">8:00 AM - 5:00 PM</span>
+                    <span className="text-gray-900">9:00 AM - 5:00 PM</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Saturday</span>
-                    <span className="text-gray-900">9:00 AM - 2:00 PM</span>
+                    <span className="text-gray-600">Saturday - Sunday</span>
+                    <span className="text-gray-900">Closed</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Sunday</span>
+                    <span className="text-gray-600">Public Holidays</span>
                     <span className="text-gray-900">Closed</span>
                   </div>
                 </div>
