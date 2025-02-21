@@ -37,6 +37,8 @@ export default function CheckoutClient() {
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string>("");
   const [total, setTotal] = useState<number>(SERVICES.poolInspection.price);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
 
   const {
     register,
@@ -397,19 +399,86 @@ export default function CheckoutClient() {
                 </div>
 
                 {/* Payment Section */}
-                {isValid && clientSecret ? (
+                {isValid && !showConfirmation && (
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmation(true)}
+                    disabled={isLoading}
+                    className={`w-full bg-teal-600 text-white py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
+                      isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isLoading ? 'Loading...' : 'Review Order'}
+                  </button>
+                )}
+
+                {showConfirmation && !showPayment && (
+                  <div className="border-t pt-6">
+                    <div className="bg-gray-50 p-6 rounded-lg mb-6">
+                      <h3 className="text-lg font-semibold mb-4">Order Confirmation</h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between">
+                          <span>Pool Safety Inspection</span>
+                          <span>${SERVICES.poolInspection.price}</span>
+                        </div>
+                        {includeCprSign && (
+                          <div className="flex justify-between text-teal-600">
+                            <span>CPR Sign</span>
+                            <span>${SERVICES.cprSign.price}</span>
+                          </div>
+                        )}
+                        <div className="border-t pt-3 flex justify-between font-semibold">
+                          <span>Final Total</span>
+                          <span>${total}</span>
+                        </div>
+                      </div>
+                      <div className="mt-6 flex space-x-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmation(false)}
+                          className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+                        >
+                          Edit Order
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowPayment(true)}
+                          disabled={isLoading}
+                          className={`flex-1 bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
+                            isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          {isLoading ? 'Loading...' : 'Proceed to Payment'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {showPayment && clientSecret ? (
                   <div className="border-t pt-6">
                     <h2 className="text-xl font-semibold mb-4">Payment Details</h2>
+                    <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                      <p className="text-sm text-blue-800">
+                        Total to be charged: <span className="font-semibold">${total}</span>
+                      </p>
+                    </div>
                     <PaymentForm
                       clientSecret={clientSecret}
                       amount={total}
                       onSubmit={handleExpressPayment}
                     />
                   </div>
-                ) : (
+                ) : showPayment ? (
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <p className="text-sm text-blue-700">
-                      {isLoading ? 'Loading payment options...' : 'Please fill in all required fields to proceed with payment.'}
+                      Loading payment options...
+                    </p>
+                  </div>
+                ) : !showConfirmation && !isValid && (
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      Please fill in all required fields to proceed.
                     </p>
                   </div>
                 )}
