@@ -9,9 +9,9 @@ import {
   Elements as StripeElements,
   PaymentRequestButtonElement,
 } from "@stripe/react-stripe-js";
-import type { Appearance } from '@stripe/stripe-js';
+import type { Appearance, PaymentRequest, PaymentRequestPaymentMethodEvent } from '@stripe/stripe-js';
 import { useRouter } from "next/navigation";
-import debounce from 'lodash/debounce';
+import Image from 'next/image';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
@@ -51,29 +51,21 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   const elements = useElements();
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState<string>('card');
-  const [paymentRequest, setPaymentRequest] = useState<any>(null);
+  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPaymentRequestVisible, setIsPaymentRequestVisible] = useState(false);
-  const prRef = useRef<any>(null);
-
-  // Debounced visibility update
-  const updatePaymentRequestVisibility = useCallback(
-    debounce((shouldShow: boolean) => {
-      setIsPaymentRequestVisible(shouldShow);
-    }, 500),
-    []
-  );
+  const prRef = useRef<PaymentRequest | null>(null);
 
   // Create payment request instance
-  const createPaymentRequest = useCallback(() => {
+  const createPaymentRequest = useCallback((currentAmount: number) => {
     if (!stripe) return null;
-    console.log('Creating payment request with amount:', amount);
+    console.log('Creating payment request with amount:', currentAmount);
     const pr = stripe.paymentRequest({
       country: 'AU',
       currency: 'aud',
       total: {
-        label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-        amount: amount * 100,
+        label: currentAmount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+        amount: currentAmount * 100,
       },
       requestShipping: false,
       requestPayerName: true,
@@ -82,7 +74,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     });
     console.log('Payment request created:', pr);
     return pr;
-  }, [stripe, amount]);
+  }, [stripe]);
 
   // Initialize payment request
   useEffect(() => {
@@ -91,51 +83,58 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
     const initializePaymentRequest = async () => {
       try {
-        // Always create a new payment request to ensure fresh state
-        const pr = createPaymentRequest();
-        if (!pr) return;
+        // Only create a new payment request if one doesn't exist
+        if (!prRef.current) {
+          const pr = createPaymentRequest(amount);
+          if (!pr) return;
 
-        const result = await pr.canMakePayment();
-        if (!mounted) return;
+          const result = await pr.canMakePayment();
+          if (!mounted) return;
 
-        if (result) {
-          // Clean up old payment request listeners
-          if (prRef.current) {
-            prRef.current.removeAllListeners();
-          }
+          if (result) {
+            prRef.current = pr;
+            setPaymentRequest(pr);
+            setIsPaymentRequestVisible(true);
 
-          prRef.current = pr;
-          setPaymentRequest(pr);
-          setIsPaymentRequestVisible(true);
+            // Handle payment request button events
+            pr.on('paymentmethod', async (event: PaymentRequestPaymentMethodEvent) => {
+              try {
+                setError(null);
+                const { clientSecret: newClientSecret } = await onSubmit({
+                  name: event.payerName || '',
+                  email: event.payerEmail || '',
+                  paymentMethod: event.paymentMethod.type,
+                });
 
-          // Handle payment request button events with fresh amount
-          pr.on('paymentmethod', async (event: any) => {
-            try {
-              setError(null);
-              const { clientSecret: newClientSecret } = await onSubmit({
-                name: event.payerName || '',
-                email: event.payerEmail || '',
-                paymentMethod: event.paymentMethod.type,
-              });
+                if (!stripe) return;
 
-              const { error: confirmError } = await stripe.confirmCardPayment(
-                newClientSecret || clientSecret,
-                {
-                  payment_method: event.paymentMethod.id,
-                  receipt_email: event.payerEmail,
+                const { error: confirmError } = await stripe.confirmCardPayment(
+                  newClientSecret || clientSecret,
+                  {
+                    payment_method: event.paymentMethod.id,
+                    receipt_email: event.payerEmail,
+                  }
+                );
+
+                if (confirmError) {
+                  event.complete('fail');
+                  throw new Error(confirmError.message);
                 }
-              );
 
-              if (confirmError) {
+                event.complete('success');
+                router.push("/checkout/success");
+              } catch (error: any) {
+                setError(error.message || 'Payment failed. Please try again.');
                 event.complete('fail');
-                throw new Error(confirmError.message);
               }
-
-              event.complete('success');
-              router.push("/checkout/success");
-            } catch (error: any) {
-              setError(error.message || 'Payment failed. Please try again.');
-              event.complete('fail');
+            });
+          }
+        } else if (prRef.current) {
+          // Update existing payment request with new amount
+          prRef.current.update({
+            total: {
+              label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+              amount: amount * 100,
             }
           });
         }
@@ -149,9 +148,25 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
 
     return () => {
       mounted = false;
-      updatePaymentRequestVisibility(false);
     };
-  }, [stripe, elements, amount, onSubmit, router, clientSecret, updatePaymentRequestVisibility, createPaymentRequest]);
+  }, [stripe, elements, amount, onSubmit, router, clientSecret, createPaymentRequest]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (prRef.current) {
+        prRef.current.off('paymentmethod');
+        prRef.current = null;
+      }
+    };
+  }, []);
+
+  // Persist payment request visibility
+  useEffect(() => {
+    if (paymentRequest && !isPaymentRequestVisible) {
+      setIsPaymentRequestVisible(true);
+    }
+  }, [paymentRequest, isPaymentRequestVisible]);
 
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -191,9 +206,11 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
           {/* Stripe Badge */}
-          <img
+          <Image
             src="https://stripe.com/img/documentation/checkout/marketplace.png"
             alt="Powered by Stripe"
+            width={120}
+            height={32}
             className="h-8 w-auto"
           />
           <div className="flex items-center">
@@ -205,19 +222,25 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         </div>
         <div className="flex items-center space-x-2">
           {/* Payment Method Icons */}
-          <img
+          <Image
             src="https://js.stripe.com/v3/fingerprinted/img/visa-365725566f9578a9589553aa9296d178.svg"
             alt="Visa"
+            width={40}
+            height={24}
             className="h-6 w-auto"
           />
-          <img
+          <Image
             src="https://js.stripe.com/v3/fingerprinted/img/mastercard-4d8844094130711885b5e41b28c9848f.svg"
             alt="Mastercard"
+            width={40}
+            height={24}
             className="h-6 w-auto"
           />
-          <img
+          <Image
             src="https://js.stripe.com/v3/fingerprinted/img/amex-a49b82f46c5cd6a96a6e418a6ca1717c.svg"
             alt="American Express"
+            width={40}
+            height={24}
             className="h-6 w-auto"
           />
         </div>

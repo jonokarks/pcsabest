@@ -3,8 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
-import PaymentForm from "@/components/PaymentForm";
-import debounce from 'lodash/debounce';
+import PaymentForm from "../../components/PaymentForm";
 
 const defaultService = {
   id: "pool-inspection",
@@ -74,7 +73,7 @@ export default function CheckoutClient() {
 
   // Debounced payment intent update
   const updatePaymentIntent = useCallback(
-    debounce(async (amount: number, items: any[], includeCprSign: boolean, customerDetails: any | null, paymentIntentId: string | null) => {
+    async (amount: number, items: any[], includeCprSign: boolean, customerDetails: any | null, paymentIntentId: string | null) => {
       try {
         const response = await fetch('/.netlify/functions/create-payment-intent', {
           method: 'POST',
@@ -106,8 +105,8 @@ export default function CheckoutClient() {
         console.error('Error updating payment intent:', error);
         setError('Error updating payment. Please refresh the page and try again.');
       }
-    }, 300),
-    []
+    },
+    [setClientSecret, setPaymentIntentId, setError]
   );
 
   // Update payment intent when total or form data changes
