@@ -110,13 +110,21 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
     return pr;
   }, [stripe, onSubmit, clientSecret, router, setError]);
 
-  // Initialize payment request
+  // Initialize and update payment request when amount changes
   useEffect(() => {
     if (!stripe || !elements) return;
     let mounted = true;
 
     const initializePaymentRequest = async () => {
       try {
+        // Clean up existing payment request
+        if (prRef.current) {
+          prRef.current.off('paymentmethod');
+          setPaymentRequest(null);
+          setIsPaymentRequestVisible(false);
+        }
+
+        // Create new payment request with current amount
         const pr = createPaymentRequest(amount);
         if (!pr) return;
 
@@ -124,14 +132,10 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         if (!mounted) return;
 
         if (result) {
-          // Clean up old payment request
-          if (prRef.current) {
-            prRef.current.off('paymentmethod');
-          }
-
           prRef.current = pr;
           setPaymentRequest(pr);
           setIsPaymentRequestVisible(true);
+          console.log('New payment request created with amount:', amount);
         }
       } catch (error: any) {
         console.error('Error initializing payment request:', error);
@@ -147,20 +151,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
         prRef.current.off('paymentmethod');
       }
     };
-  }, [stripe, elements, createPaymentRequest]); // Initialize only when Stripe is ready
-
-  // Update payment request when amount changes
-  useEffect(() => {
-    if (!prRef.current) return;
-
-    console.log('Updating payment request with new amount:', amount);
-    prRef.current.update({
-      total: {
-        label: amount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-        amount: amount * 100,
-      }
-    });
-  }, [amount]); // Update whenever amount changes
+  }, [stripe, elements, createPaymentRequest, amount]); // Re-initialize when amount changes
 
   // Cleanup on unmount
   useEffect(() => {
