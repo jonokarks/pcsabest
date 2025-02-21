@@ -33,6 +33,7 @@ interface FormData {
 
 export default function CheckoutClient() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [includeCprSign, setIncludeCprSign] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string>("");
@@ -60,12 +61,14 @@ export default function CheckoutClient() {
   // Create or update payment intent when form is valid and total changes
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
+    let loadingTimeoutId: NodeJS.Timeout;
 
     const updatePaymentIntent = async () => {
       if (!isValid) return;
 
       try {
-        setIsLoading(true);
+        // Debounce loading state to prevent quick flashes
+        loadingTimeoutId = setTimeout(() => setIsLoading(true), 500);
         setError(null);
 
         const response = await fetch('/.netlify/functions/create-payment-intent', {
@@ -94,57 +97,45 @@ export default function CheckoutClient() {
         setError(err.message || 'An error occurred. Please try again.');
         setClientSecret("");
       } finally {
+        clearTimeout(loadingTimeoutId);
         setIsLoading(false);
       }
     };
 
     // Debounce updates
     timeoutId = setTimeout(updatePaymentIntent, 300);
-    return () => clearTimeout(timeoutId);
+    return () => {
+      clearTimeout(timeoutId);
+      clearTimeout(loadingTimeoutId);
+    };
   }, [total, isValid, formData, includeCprSign]);
 
   // Handle Express Checkout submission
-  const handleExpressPayment = async (data: { 
-    name?: string; 
-    email?: string; 
-    paymentMethod?: string; 
-  }) => {
+  const handleExpressPayment = async () => {
+    if (isProcessing) return { clientSecret };
+
     try {
       setError(null);
-      setIsLoading(true);
+      setIsProcessing(true);
 
-      const response = await fetch('/.netlify/functions/create-payment-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: total,
-          items: [
-            SERVICES.poolInspection,
-            ...(includeCprSign ? [SERVICES.cprSign] : [])
-          ],
-          includeCprSign,
-          customerDetails: {
-            ...formData,
-            ...data,
-          },
-          isExpressCheckout: true,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process payment');
-      }
-
-      const result = await response.json();
-      if (result.error) throw new Error(result.error);
-
-      return { clientSecret: result.clientSecret };
+      // Use existing clientSecret instead of creating a new one
+      return { clientSecret };
     } catch (err: any) {
       setError(err.message || 'Payment failed. Please try again.');
       throw err;
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
+  };
+
+  const handleReviewOrder = () => {
+    if (isLoading || !isValid) return;
+    setShowConfirmation(true);
+  };
+
+  const handleProceedToPayment = () => {
+    if (isLoading) return;
+    setShowPayment(true);
   };
 
   return (
@@ -402,10 +393,10 @@ export default function CheckoutClient() {
                 {isValid && !showConfirmation && (
                   <button
                     type="button"
-                    onClick={() => setShowConfirmation(true)}
-                    disabled={isLoading}
+                    onClick={handleReviewOrder}
+                    disabled={isLoading || !isValid}
                     className={`w-full bg-teal-600 text-white py-3 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
-                      isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                      (isLoading || !isValid) ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                   >
                     {isLoading ? 'Loading...' : 'Review Order'}
@@ -436,13 +427,16 @@ export default function CheckoutClient() {
                         <button
                           type="button"
                           onClick={() => setShowConfirmation(false)}
-                          className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+                          disabled={isLoading}
+                          className={`flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors ${
+                            isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
                         >
                           Edit Order
                         </button>
                         <button
                           type="button"
-                          onClick={() => setShowPayment(true)}
+                          onClick={handleProceedToPayment}
                           disabled={isLoading}
                           className={`flex-1 bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors ${
                             isLoading ? 'opacity-50 cursor-not-allowed' : ''

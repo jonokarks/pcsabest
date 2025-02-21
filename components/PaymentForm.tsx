@@ -18,11 +18,7 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY 
 interface PaymentFormProps {
   clientSecret: string;
   amount: number;
-  onSubmit: (data: {
-    name?: string;
-    email?: string;
-    paymentMethod?: string;
-  }) => Promise<{ clientSecret: string }>;
+  onSubmit: () => Promise<{ clientSecret: string }>;
 }
 
 function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps) {
@@ -62,11 +58,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: PaymentFormProps
         setError(null);
         setIsProcessing(true);
 
-        const { clientSecret: newClientSecret } = await onSubmit({
-          name: event.payerName || '',
-          email: event.payerEmail || '',
-          paymentMethod: event.paymentMethod.type,
-        });
+        const { clientSecret: newClientSecret } = await onSubmit();
 
         const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
           newClientSecret || clientSecret,
