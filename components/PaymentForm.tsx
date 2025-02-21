@@ -9,7 +9,7 @@ import {
   Elements as StripeElements,
   PaymentRequestButtonElement,
 } from "@stripe/react-stripe-js";
-import type { Appearance, PaymentRequest, PaymentRequestPaymentMethodEvent } from '@stripe/stripe-js';
+import type { Appearance, PaymentRequest, PaymentRequestPaymentMethodEvent, Stripe } from '@stripe/stripe-js';
 import { useRouter } from "next/navigation";
 import Image from 'next/image';
 
@@ -54,79 +54,105 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPaymentRequestVisible, setIsPaymentRequestVisible] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [canMakePayment, setCanMakePayment] = useState(false);
   const prRef = useRef<PaymentRequest | null>(null);
   const mountedRef = useRef(true);
+  const initializingRef = useRef(false);
 
   // Create payment request instance
-  const createPaymentRequest = useCallback((currentAmount: number) => {
-    if (!stripe) return null;
+  const createPaymentRequest = useCallback(async (currentAmount: number, stripeInstance: Stripe) => {
+    if (!stripeInstance || initializingRef.current) return null;
     
-    // Validate amount
-    const validAmount = Math.round(currentAmount * 100) / 100;
-    console.log('Creating payment request with amount:', validAmount);
-    
-    const pr = stripe.paymentRequest({
-      country: 'AU',
-      currency: 'aud',
-      total: {
-        label: validAmount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
-        amount: Math.round(validAmount * 100), // Ensure integer amount in cents
-      },
-      requestShipping: false,
-      requestPayerName: true,
-      requestPayerEmail: true,
-      disableWallets: ['link'],
-    });
-    console.log('Payment request created:', pr);
-
-    // Add payment method handler
-    pr.on('paymentmethod', async (event: PaymentRequestPaymentMethodEvent) => {
-      try {
-        setError(null);
-        const { clientSecret: newClientSecret } = await onSubmit({
-          name: event.payerName || '',
-          email: event.payerEmail || '',
-          paymentMethod: event.paymentMethod.type,
-        });
-
-        if (!stripe) return;
-
-        const { error: confirmError } = await stripe.confirmCardPayment(
-          newClientSecret || clientSecret,
-          {
-            payment_method: event.paymentMethod.id,
-            receipt_email: event.payerEmail,
-          }
-        );
-
-        if (confirmError) {
-          event.complete('fail');
-          throw new Error(confirmError.message);
-        }
-
-        event.complete('success');
-        router.push("/checkout/success");
-      } catch (error: any) {
-        setError(error.message || 'Payment failed. Please try again.');
-        event.complete('fail');
+    try {
+      initializingRef.current = true;
+      
+      // Validate amount
+      const validAmount = Math.round(currentAmount * 100) / 100;
+      console.log('Creating payment request with amount:', validAmount);
+      
+      const pr = stripeInstance.paymentRequest({
+        country: 'AU',
+        currency: 'aud',
+        total: {
+          label: validAmount === 240 ? 'Pool Safety Inspection with CPR Sign' : 'Pool Safety Inspection',
+          amount: Math.round(validAmount * 100), // Ensure integer amount in cents
+        },
+        requestShipping: false,
+        requestPayerName: true,
+        requestPayerEmail: true,
+        disableWallets: ['link'],
+      });
+      
+      // Check if payment can be made before proceeding
+      const result = await pr.canMakePayment();
+      if (!mountedRef.current) return null;
+      
+      if (!result) {
+        console.log('Payment request cannot make payment');
+        setCanMakePayment(false);
+        return null;
       }
-    });
+      
+      console.log('Payment request can make payment');
+      setCanMakePayment(true);
+      
+      // Add payment method handler
+      pr.on('paymentmethod', async (event: PaymentRequestPaymentMethodEvent) => {
+        try {
+          setError(null);
+          const { clientSecret: newClientSecret } = await onSubmit({
+            name: event.payerName || '',
+            email: event.payerEmail || '',
+            paymentMethod: event.paymentMethod.type,
+          });
 
-    return pr;
-  }, [stripe, onSubmit, clientSecret, router, setError]);
+          if (!stripeInstance) return;
+
+          const { error: confirmError } = await stripeInstance.confirmCardPayment(
+            newClientSecret || clientSecret,
+            {
+              payment_method: event.paymentMethod.id,
+              receipt_email: event.payerEmail,
+            }
+          );
+
+          if (confirmError) {
+            event.complete('fail');
+            throw new Error(confirmError.message);
+          }
+
+          event.complete('success');
+          router.push("/checkout/success");
+        } catch (error: any) {
+          setError(error.message || 'Payment failed. Please try again.');
+          event.complete('fail');
+        }
+      });
+
+      return pr;
+    } catch (error: any) {
+      console.error('Error creating payment request:', error);
+      setError('Failed to initialize payment method. Please try again.');
+      return null;
+    } finally {
+      initializingRef.current = false;
+    }
+  }, [onSubmit, clientSecret, router]);
 
   // Initialize and update payment request when amount changes
   useEffect(() => {
-    if (!stripe || !elements || isUpdating) return;
+    if (!stripe || !elements) return;
+
+    let mounted = true;
+    let buttonTimeoutId: NodeJS.Timeout;
+    let initTimeoutId: NodeJS.Timeout;
 
     const initializePaymentRequest = async () => {
       try {
-        setIsUpdating(true);
-        console.log('Initializing payment request...');
-
-        // First, clean up existing payment request and hide button
+        // Hide button during update
         setIsPaymentRequestVisible(false);
+
+        // Clean up existing payment request
         if (prRef.current) {
           console.log('Cleaning up existing payment request...');
           prRef.current.off('paymentmethod');
@@ -134,53 +160,48 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
           setPaymentRequest(null);
         }
 
-        // Wait for cleanup to complete
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Small delay to ensure cleanup is complete
+        await new Promise(resolve => setTimeout(resolve, 50));
+        if (!mounted) return;
 
-        if (!mountedRef.current) return;
+        // Create new payment request
+        const pr = await createPaymentRequest(amount, stripe);
+        if (!mounted) return;
 
-        // Create new payment request with current amount
-        console.log('Creating new payment request...');
-        const pr = createPaymentRequest(amount);
-        if (!pr) return;
-
-        const result = await pr.canMakePayment();
-        if (!mountedRef.current) return;
-
-        if (result) {
-          console.log('Payment request can make payment, updating state...');
+        if (pr) {
+          console.log('Setting up new payment request...');
           prRef.current = pr;
           setPaymentRequest(pr);
-          
-          // Small delay before showing button to ensure clean transition
-          setTimeout(() => {
-            if (mountedRef.current) {
+
+          // Show button after a small delay
+          buttonTimeoutId = setTimeout(() => {
+            if (mounted && canMakePayment) {
               setIsPaymentRequestVisible(true);
               console.log('Payment request button visible');
             }
-          }, 100);
-        } else {
-          console.log('Payment request cannot make payment');
+          }, 50);
         }
       } catch (error: any) {
         console.error('Error initializing payment request:', error);
         setError('Error initializing payment. Please try again.');
       } finally {
-        if (mountedRef.current) {
-          setIsUpdating(false);
-        }
+        initializingRef.current = false;
       }
     };
 
-    initializePaymentRequest();
+    // Debounce initialization
+    initTimeoutId = setTimeout(initializePaymentRequest, 100);
 
     return () => {
+      mounted = false;
+      clearTimeout(buttonTimeoutId);
+      clearTimeout(initTimeoutId);
       if (prRef.current) {
         prRef.current.off('paymentmethod');
         prRef.current = null;
       }
     };
-  }, [stripe, elements, createPaymentRequest, amount, isUpdating]); // Re-initialize when amount changes
+  }, [stripe, elements, createPaymentRequest, amount, canMakePayment]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -194,13 +215,6 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
       }
     };
   }, []);
-
-  // Persist payment request visibility
-  useEffect(() => {
-    if (paymentRequest && !isPaymentRequestVisible) {
-      setIsPaymentRequestVisible(true);
-    }
-  }, [paymentRequest, isPaymentRequestVisible]);
 
   useEffect(() => {
     if (!stripe || !elements) return;
@@ -340,7 +354,7 @@ function PaymentFormContent({ amount, onSubmit, clientSecret }: {
             }
           }}
           onChange={(event) => {
-            if (event.value.type) {
+            if (event.value?.type) {
               setPaymentMethod(event.value.type);
             }
           }}
